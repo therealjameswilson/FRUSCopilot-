@@ -1,11 +1,18 @@
 import os
+from pathlib import Path
 
 import numpy as np
 from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-vectors = np.load("database/frus_vectors.npy", allow_pickle=True)
+BASE_DIR = Path(__file__).resolve().parent.parent
+VECTORS_PATH = BASE_DIR / "database" / "frus_vectors.npy"
+
+if not VECTORS_PATH.exists():
+    raise FileNotFoundError(f"Missing vector file: {VECTORS_PATH}")
+
+vectors = np.load(VECTORS_PATH, allow_pickle=True)
 
 def embed_query(query):
 
