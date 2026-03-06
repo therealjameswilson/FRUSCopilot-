@@ -1,0 +1,107 @@
+:root {
+  font-family: Arial, sans-serif;
+  color: #1f2937;
+  background: #f8fafc;
+}
+
+body {
+  margin: 0;
+}
+
+.container {
+  max-width: 960px;
+  margin: 2rem auto;
+  padding: 0 1rem 2rem;
+}
+
+h1 {
+  margin-bottom: 0.2rem;
+}
+
+.subhead {
+  margin-top: 0;
+  color: #475569;
+}
+
+.status-banner {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  margin: 1rem 0;
+}
+
+.controls {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 1.2rem 0;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.8rem;
+}
+
+input, button {
+  font-size: 1rem;
+  padding: 0.5rem;
+}
+
+fieldset {
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  margin-bottom: 0.8rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+button {
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #1d4ed8;
+}
+
+.secondary {
+  color: #1d4ed8;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.secondary:hover {
+  text-decoration: underline;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.meta {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.errors {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+  border-radius: 10px;
+  padding: 0.8rem;
+}
