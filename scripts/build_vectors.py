@@ -21,20 +21,20 @@ def require_openai_api_key() -> None:
         )
 
 
-def load_documents(path: Path) -> list[dict]:
+def load_documents(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         raise FileNotFoundError(
             f"Missing source documents file: {path}. "
             "You must provide source texts first in database/frus_documents.json."
         )
 
-    with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+    with path.open("r", encoding="utf-8") as file:
+        data = json.load(file)
 
     if not isinstance(data, list):
         raise ValueError("database/frus_documents.json must contain a JSON array of objects.")
 
-    validated_docs = []
+    validated_docs: list[dict[str, str]] = []
     for index, item in enumerate(data):
         if not isinstance(item, dict):
             raise ValueError(f"Document at index {index} must be an object with 'id' and 'text'.")
@@ -44,10 +44,8 @@ def load_documents(path: Path) -> list[dict]:
 
         if doc_id is None or text is None:
             raise ValueError(f"Document at index {index} is missing required keys 'id' and/or 'text'.")
-
         if not isinstance(doc_id, str):
             raise ValueError(f"Document at index {index} has non-string 'id'.")
-
         if not isinstance(text, str):
             raise ValueError(f"Document at index {index} has non-string 'text'.")
 
@@ -61,17 +59,17 @@ def load_documents(path: Path) -> list[dict]:
     return validated_docs
 
 
-def batched(items: list[dict], batch_size: int):
+def batched(items: list[dict[str, str]], batch_size: int):
     for i in range(0, len(items), batch_size):
-        yield items[i:i + batch_size]
+        yield items[i : i + batch_size]
 
 
 def build_vectors() -> None:
     require_openai_api_key()
     DATABASE_DIR.mkdir(parents=True, exist_ok=True)
 
-    docs = load_documents(DOCUMENTS_PATH)
     client = OpenAI()
+    docs = load_documents(DOCUMENTS_PATH)
 
     all_embeddings: list[list[float]] = []
     all_ids: list[str] = []
@@ -85,7 +83,10 @@ def build_vectors() -> None:
             input=batch_texts,
         )
 
-        batch_embeddings = [item.embedding for item in response.data]
+        # Preserve original order using response index values.
+        ordered = sorted(response.data, key=lambda item: item.index)
+        batch_embeddings = [item.embedding for item in ordered]
+
         if len(batch_embeddings) != len(batch_texts):
             raise RuntimeError("Embedding API returned an unexpected number of vectors.")
 
@@ -93,10 +94,10 @@ def build_vectors() -> None:
         all_embeddings.extend(batch_embeddings)
 
     vectors_array = np.array(all_embeddings, dtype=np.float32)
-
     np.save(VECTORS_PATH, vectors_array)
-    with VECTOR_IDS_PATH.open("w", encoding="utf-8") as f:
-        json.dump(all_ids, f, ensure_ascii=False, indent=2)
+
+    with VECTOR_IDS_PATH.open("w", encoding="utf-8") as file:
+        json.dump(all_ids, file, ensure_ascii=False, indent=2)
 
     print(
         "Built vectors successfully: "
