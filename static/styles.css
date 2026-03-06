@@ -45,7 +45,7 @@ h1 {
   margin-bottom: 0.8rem;
 }
 
-input, button {
+input, select, button {
   font-size: 1rem;
   padding: 0.5rem;
 }

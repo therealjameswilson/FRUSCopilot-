@@ -3,7 +3,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app import app, parse_max_results, parse_volume
+from app import (
+    app,
+    doc_matches_volume,
+    extract_target_volume_names,
+    parse_max_results,
+    parse_volume,
+)
 
 
 def test_parse_max_results_bounds():
@@ -31,3 +37,21 @@ def test_healthz_route():
         response = client.get("/healthz")
         assert response.status_code == 200
         assert response.get_json() == {"status": "ok"}
+
+
+def test_extract_target_volume_names_filters_statuses():
+    html = """
+    <table>
+      <tr><th>Volume</th><th>Status</th></tr>
+      <tr><td><a href='/historicaldocuments/frus1969-76v11'>Vol XI</a></td><td>Being Researched</td></tr>
+      <tr><td><a href='/historicaldocuments/frus1969-76v12'>Vol XII</a></td><td>Planner</td></tr>
+      <tr><td><a href='/historicaldocuments/frus1969-76v13'>Vol XIII</a></td><td>Published</td></tr>
+    </table>
+    """
+    assert extract_target_volume_names(html) == ["Vol XI", "Vol XII"]
+
+
+def test_doc_matches_volume_by_source_name():
+    doc = {"source": "frus1969-76v11.xml", "title": "Doc", "text": "Body"}
+    assert doc_matches_volume(doc, "FRUS 1969-76, Volume XI")
+    assert not doc_matches_volume(doc, "FRUS 1969-76, Volume XII")
