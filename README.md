@@ -20,6 +20,19 @@ python app.py
 
 Open `http://localhost:8000`.
 
+## Public share link from this repo
+
+A static, browser-only version of the FRUS interface is available at `docs/index.html`.
+
+- GitHub file URL (works immediately): `https://github.com/<org>/<repo>/blob/<branch>/docs/index.html`
+- GitHub Pages URL (after enabling Pages for `/docs`): `https://<org>.github.io/<repo>/`
+
+To enable GitHub Pages:
+1. Go to **Settings → Pages** in your repo.
+2. Set **Source** to **Deploy from a branch**.
+3. Select your branch and **/docs** folder.
+4. Save and share the generated Pages URL.
+
 ## Deploy publicly
 
 This app is ready to run behind Gunicorn on any VM/PaaS.

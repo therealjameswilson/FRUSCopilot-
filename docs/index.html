@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FRUS Copilot (Public Repo Site)</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f8fb;
+        --card: #ffffff;
+        --text: #1e293b;
+        --muted: #475569;
+        --accent: #1d4ed8;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f172a;
+          --card: #111827;
+          --text: #e2e8f0;
+          --muted: #94a3b8;
+          --accent: #60a5fa;
+        }
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 900px;
+        margin: 2rem auto;
+        padding: 0 1rem 2rem;
+      }
+
+      .card {
+        background: var(--card);
+        border-radius: 12px;
+        padding: 1rem;
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+        margin-bottom: 1rem;
+      }
+
+      h1, h2, h3 {
+        margin-top: 0;
+      }
+
+      .subhead {
+        color: var(--muted);
+      }
+
+      label {
+        display: block;
+        margin: 0.5rem 0 0.25rem;
+        font-weight: 600;
+      }
+
+      input, button {
+        font-size: 1rem;
+      }
+
+      input[type="text"], input[type="number"], input[type="file"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.6rem;
+        border-radius: 8px;
+        border: 1px solid #94a3b8;
+        background: transparent;
+        color: inherit;
+      }
+
+      .actions {
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+        margin-top: 0.9rem;
+      }
+
+      button, .button-link {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 0.6rem 1rem;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .button-link.secondary {
+        background: #334155;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .results article {
+        border-top: 1px solid #cbd5e1;
+        padding-top: 0.8rem;
+        margin-top: 0.8rem;
+      }
+
+      code {
+        padding: 0.15rem 0.4rem;
+        background: #1e293b;
+        color: #f8fafc;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card">
+        <h1>FRUS Copilot (Public Repo Website)</h1>
+        <p class="subhead">Share this page URL directly with colleagues. It runs entirely in the browser and never uploads files to a server.</p>
+        <p class="meta">Tip: if GitHub Pages is enabled for this repo, this page can live at <code>https://&lt;org&gt;.github.io/&lt;repo&gt;/</code>.</p>
+      </section>
+
+      <section class="card">
+        <h2>Search FRUS XML</h2>
+        <label for="xml-file">Upload FRUS XML file</label>
+        <input id="xml-file" type="file" accept=".xml" />
+
+        <label for="query">Search query</label>
+        <input id="query" type="text" placeholder="e.g. Cuba missile" />
+
+        <label for="max-results">Max results</label>
+        <input id="max-results" type="number" value="25" min="1" max="200" />
+
+        <div class="actions">
+          <button id="run-search" type="button">Run search</button>
+          <a class="button-link secondary" id="share-link" href="#">Copy shareable URL</a>
+        </div>
+
+        <p id="status" class="meta">No file loaded.</p>
+      </section>
+
+      <section class="card results">
+        <h2>Results</h2>
+        <p id="stats" class="meta">Total docs loaded: 0 · Matches: 0 · Shown: 0</p>
+        <div id="result-list">
+          <p class="meta">Upload an XML file and run a search.</p>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const fileInput = document.getElementById('xml-file');
+      const queryInput = document.getElementById('query');
+      const maxResultsInput = document.getElementById('max-results');
+      const runSearchButton = document.getElementById('run-search');
+      const shareLink = document.getElementById('share-link');
+      const status = document.getElementById('status');
+      const stats = document.getElementById('stats');
+      const resultList = document.getElementById('result-list');
+
+      let docs = [];
+
+      const getParam = (name, fallback = '') => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get(name) ?? fallback;
+      };
+
+      queryInput.value = getParam('query');
+      maxResultsInput.value = getParam('max_results', '25');
+
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files?.[0];
+        if (!file) {
+          docs = [];
+          status.textContent = 'No file loaded.';
+          render([], 0);
+          return;
+        }
+
+        try {
+          const text = await file.text();
+          docs = parseFrusXml(text, file.name);
+          status.textContent = `Loaded ${docs.length} document sections from ${file.name}.`;
+          runSearch();
+        } catch (error) {
+          docs = [];
+          status.textContent = `Could not parse XML: ${error}`;
+          render([], 0);
+        }
+      });
+
+      runSearchButton.addEventListener('click', runSearch);
+      shareLink.addEventListener('click', (event) => {
+        event.preventDefault();
+        const url = new URL(window.location.href);
+        url.searchParams.set('query', queryInput.value.trim());
+        url.searchParams.set('max_results', normalizedMaxResults());
+        navigator.clipboard.writeText(url.toString());
+        shareLink.textContent = 'Copied!';
+        setTimeout(() => (shareLink.textContent = 'Copy shareable URL'), 1200);
+      });
+
+      function normalizedMaxResults() {
+        const raw = Number(maxResultsInput.value || 25);
+        if (Number.isNaN(raw)) return 25;
+        return Math.min(200, Math.max(1, raw));
+      }
+
+      function runSearch() {
+        const query = queryInput.value.trim().toLowerCase();
+        const maxResults = normalizedMaxResults();
+        const filtered = query
+          ? docs.filter((d) => d.title.toLowerCase().includes(query) || d.text.toLowerCase().includes(query))
+          : docs;
+
+        render(filtered.slice(0, maxResults), filtered.length, docs.length);
+      }
+
+      function render(shownDocs, matchCount, totalCount = docs.length) {
+        stats.textContent = `Total docs loaded: ${totalCount} · Matches: ${matchCount} · Shown: ${shownDocs.length}`;
+
+        if (!shownDocs.length) {
+          resultList.innerHTML = '<p class="meta">No matching documents.</p>';
+          return;
+        }
+
+        resultList.innerHTML = shownDocs.map((doc) => {
+          const excerpt = escapeHtml(doc.text.slice(0, 900) + (doc.text.length > 900 ? '…' : ''));
+          return `<article><h3>${escapeHtml(doc.title)}</h3><p class="meta">Source: ${escapeHtml(doc.source)}</p><p>${excerpt}</p></article>`;
+        }).join('');
+      }
+
+      function parseFrusXml(xmlText, sourceName) {
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(xmlText, 'application/xml');
+        const parseErr = xml.querySelector('parsererror');
+        if (parseErr) {
+          throw new Error(parseErr.textContent.trim());
+        }
+
+        const divs = [...xml.querySelectorAll('div[type="document"], tei\\:div[type="document"]')];
+        return divs.map((div) => {
+          const head = div.querySelector('head, tei\\:head');
+          return {
+            title: (head?.textContent || 'Untitled document').trim(),
+            text: (div.textContent || '').trim(),
+            source: sourceName,
+          };
+        });
+      }
+
+      function escapeHtml(raw) {
+        return raw
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+    </script>
+  </body>
+</html>
