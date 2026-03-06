@@ -1,41 +1,41 @@
 import os
+from pathlib import Path
 
 import numpy as np
 from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-vectors = np.load("database/frus_vectors.npy", allow_pickle=True)
+BASE_DIR = Path(__file__).resolve().parent.parent
+VECTORS_PATH = BASE_DIR / "database" / "frus_vectors.npy"
+
+if not VECTORS_PATH.exists():
+    raise FileNotFoundError(f"Missing vector file: {VECTORS_PATH}")
+
+vectors = np.load(VECTORS_PATH, allow_pickle=True)
+
 
 def embed_query(query):
-
     response = client.embeddings.create(
         model="text-embedding-3-large",
         input=query
     )
-
     return np.array(response.data[0].embedding)
 
 
 def suggest_documents(topic, top_k=20):
-
     query_vec = embed_query(topic)
-
     scores = []
 
     for i, vec in enumerate(vectors):
-
         score = np.dot(query_vec, vec)
-
         scores.append((i, score))
 
     scores.sort(key=lambda x: x[1], reverse=True)
-
     return scores[:top_k]
 
 
 def suggest_declassified_sources(topic):
-
     prompt = f"""
 You are assisting historians compiling a FRUS volume.
 
@@ -66,7 +66,6 @@ Return a short list.
 
 
 def suggest_classified_archives(topic):
-
     prompt = f"""
 You are assisting a FRUS historian.
 
@@ -99,7 +98,6 @@ Return likely collections to search.
 
 
 def main():
-
     print("\nFRUS Volume Builder")
     print("-------------------")
 
@@ -113,11 +111,9 @@ def main():
         print("Doc ID:", r[0], "| relevance:", round(r[1], 3))
 
     print("\nDeclassified sources to search:\n")
-
     print(suggest_declassified_sources(topic))
 
     print("\nPossible classified archival collections:\n")
-
     print(suggest_classified_archives(topic))
 
 
