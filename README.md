@@ -51,6 +51,11 @@ Example:
 FRUS_DATA_DIR=/srv/frus/volumes gunicorn --bind 0.0.0.0:8000 app:app
 ```
 
+
+### Streamlit Community Cloud secret
+
+If you deploy the Streamlit app, set `OPENAI_API_KEY` in **App settings → Secrets** (or environment variables) so OpenAI client initialization works at runtime.
+
 ## Notes
 
 - The app displays parse warnings for malformed XML files rather than crashing.
