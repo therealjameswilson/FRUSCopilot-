@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -8,11 +9,19 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 VECTORS_PATH = BASE_DIR / "database" / "frus_vectors.npy"
+VECTOR_IDS_PATH = BASE_DIR / "database" / "frus_vector_ids.json"
 
 if not VECTORS_PATH.exists():
     raise FileNotFoundError(f"Missing vector file: {VECTORS_PATH}")
 
 vectors = np.load(VECTORS_PATH, allow_pickle=True)
+
+vector_ids = None
+if VECTOR_IDS_PATH.exists():
+    with VECTOR_IDS_PATH.open("r", encoding="utf-8") as f:
+        loaded_ids = json.load(f)
+    if isinstance(loaded_ids, list) and len(loaded_ids) == len(vectors):
+        vector_ids = loaded_ids
 
 
 def embed_query(query):
@@ -29,7 +38,8 @@ def suggest_documents(topic, top_k=20):
 
     for i, vec in enumerate(vectors):
         score = np.dot(query_vec, vec)
-        scores.append((i, score))
+        doc_ref = vector_ids[i] if vector_ids is not None else i
+        scores.append((doc_ref, score))
 
     scores.sort(key=lambda x: x[1], reverse=True)
     return scores[:top_k]
