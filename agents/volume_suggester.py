@@ -10,14 +10,15 @@ DATABASE_DIR = BASE_DIR / "database"
 VECTORS_PATH = DATABASE_DIR / "frus_vectors.npy"
 VECTOR_IDS_PATH = DATABASE_DIR / "frus_vector_ids.json"
 
-
 if not os.getenv("OPENAI_API_KEY"):
     raise EnvironmentError("Missing OPENAI_API_KEY environment variable.")
 
 client = OpenAI()
+_vectors: np.ndarray | None = None
+_vector_ids: list[str] | None = None
 
 
-def load_vectors() -> np.ndarray:
+def _load_vectors() -> np.ndarray:
     if not VECTORS_PATH.exists():
         raise FileNotFoundError(
             "Missing vector file: database/frus_vectors.npy. "
@@ -27,7 +28,7 @@ def load_vectors() -> np.ndarray:
     return np.load(VECTORS_PATH, allow_pickle=False)
 
 
-def load_vector_ids(expected_count: int) -> list[str] | None:
+def _load_vector_ids(expected_count: int) -> list[str] | None:
     if not VECTOR_IDS_PATH.exists():
         return None
 
@@ -40,8 +41,14 @@ def load_vector_ids(expected_count: int) -> list[str] | None:
     return None
 
 
-vectors = load_vectors()
-vector_ids = load_vector_ids(len(vectors))
+def _get_vector_data() -> tuple[np.ndarray, list[str] | None]:
+    global _vectors, _vector_ids
+
+    if _vectors is None:
+        _vectors = _load_vectors()
+        _vector_ids = _load_vector_ids(len(_vectors))
+
+    return _vectors, _vector_ids
 
 
 def embed_query(query):
@@ -53,6 +60,7 @@ def embed_query(query):
 
 
 def suggest_documents(topic, top_k=20):
+    vectors, vector_ids = _get_vector_data()
     query_vec = embed_query(topic)
     scores = []
 
