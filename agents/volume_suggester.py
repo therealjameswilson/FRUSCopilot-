@@ -5,29 +5,49 @@ from pathlib import Path
 import numpy as np
 from openai import OpenAI
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
 BASE_DIR = Path(__file__).resolve().parent.parent
-VECTORS_PATH = BASE_DIR / "database" / "frus_vectors.npy"
-VECTOR_IDS_PATH = BASE_DIR / "database" / "frus_vector_ids.json"
+DATABASE_DIR = BASE_DIR / "database"
+VECTORS_PATH = DATABASE_DIR / "frus_vectors.npy"
+VECTOR_IDS_PATH = DATABASE_DIR / "frus_vector_ids.json"
 
-if not VECTORS_PATH.exists():
-    raise FileNotFoundError(f"Missing vector file: {VECTORS_PATH}")
 
-vectors = np.load(VECTORS_PATH, allow_pickle=True)
+if not os.getenv("OPENAI_API_KEY"):
+    raise EnvironmentError("Missing OPENAI_API_KEY environment variable.")
 
-vector_ids = None
-if VECTOR_IDS_PATH.exists():
-    with VECTOR_IDS_PATH.open("r", encoding="utf-8") as f:
-        loaded_ids = json.load(f)
-    if isinstance(loaded_ids, list) and len(loaded_ids) == len(vectors):
-        vector_ids = loaded_ids
+client = OpenAI()
+
+
+def load_vectors() -> np.ndarray:
+    if not VECTORS_PATH.exists():
+        raise FileNotFoundError(
+            "Missing vector file: database/frus_vectors.npy. "
+            "Run `python scripts/build_vectors.py` to generate it."
+        )
+
+    return np.load(VECTORS_PATH, allow_pickle=False)
+
+
+def load_vector_ids(expected_count: int) -> list[str] | None:
+    if not VECTOR_IDS_PATH.exists():
+        return None
+
+    with VECTOR_IDS_PATH.open("r", encoding="utf-8") as file:
+        loaded_ids = json.load(file)
+
+    if isinstance(loaded_ids, list) and len(loaded_ids) == expected_count:
+        return [str(item) for item in loaded_ids]
+
+    return None
+
+
+vectors = load_vectors()
+vector_ids = load_vector_ids(len(vectors))
 
 
 def embed_query(query):
     response = client.embeddings.create(
         model="text-embedding-3-large",
-        input=query
+        input=query,
     )
     return np.array(response.data[0].embedding)
 
@@ -69,7 +89,7 @@ Return a short list.
 
     response = client.responses.create(
         model="gpt-5",
-        input=prompt
+        input=prompt,
     )
 
     return response.output_text
@@ -101,7 +121,7 @@ Return likely collections to search.
 
     response = client.responses.create(
         model="gpt-5",
-        input=prompt
+        input=prompt,
     )
 
     return response.output_text

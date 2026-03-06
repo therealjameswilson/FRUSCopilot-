@@ -1,0 +1,10 @@
+[
+  {
+    "id": "doc-1",
+    "text": "Full text of FRUS document 1 goes here."
+  },
+  {
+    "id": "doc-2",
+    "text": "Full text of FRUS document 2 goes here."
+  }
+]
