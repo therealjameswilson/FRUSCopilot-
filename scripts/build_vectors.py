@@ -8,6 +8,7 @@ from openai import OpenAI
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATABASE_DIR = BASE_DIR / "database"
 DOCUMENTS_PATH = DATABASE_DIR / "frus_documents.json"
+EXAMPLE_DOCUMENTS_PATH = DATABASE_DIR / "frus_documents.example.json"
 VECTORS_PATH = DATABASE_DIR / "frus_vectors.npy"
 VECTOR_IDS_PATH = DATABASE_DIR / "frus_vector_ids.json"
 BATCH_SIZE = 64
@@ -21,13 +22,24 @@ def require_openai_api_key() -> None:
         )
 
 
-def load_documents(path: Path) -> list[dict[str, str]]:
-    if not path.exists():
+def ensure_documents_file() -> None:
+    if DOCUMENTS_PATH.exists():
+        return
+
+    if not EXAMPLE_DOCUMENTS_PATH.exists():
         raise FileNotFoundError(
-            f"Missing source documents file: {path}. "
-            "You must provide source texts first in database/frus_documents.json."
+            f"Missing both {DOCUMENTS_PATH} and {EXAMPLE_DOCUMENTS_PATH}. "
+            "Create one of them with FRUS source text records first."
         )
 
+    DOCUMENTS_PATH.write_text(EXAMPLE_DOCUMENTS_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+    print(
+        "Created database/frus_documents.json from database/frus_documents.example.json. "
+        "Replace it with real FRUS text before production use."
+    )
+
+
+def load_documents(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8") as file:
         data = json.load(file)
 
@@ -67,6 +79,7 @@ def batched(items: list[dict[str, str]], batch_size: int):
 def build_vectors() -> None:
     require_openai_api_key()
     DATABASE_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_documents_file()
 
     client = OpenAI()
     docs = load_documents(DOCUMENTS_PATH)
@@ -83,7 +96,6 @@ def build_vectors() -> None:
             input=batch_texts,
         )
 
-        # Preserve original order using response index values.
         ordered = sorted(response.data, key=lambda item: item.index)
         batch_embeddings = [item.embedding for item in ordered]
 
