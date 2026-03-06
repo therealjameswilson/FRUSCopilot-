@@ -1,1 +1,6 @@
 .env
+
+# Ensure FRUS vector database artifacts are commit-eligible
+!database/
+!database/frus_vectors.npy
+!database/frus_vector_ids.json
