@@ -18,6 +18,16 @@
 
       <form method="post" enctype="multipart/form-data" class="controls">
         <div class="row">
+          <label for="selected_volume">FRUS volume</label>
+          <select id="selected_volume" name="selected_volume" required>
+            <option value="" {% if not selected_volume %}selected{% endif %} disabled>Select a volume from Being Researched or Planner</option>
+            {% for volume in volume_options %}
+              <option value="{{ volume }}" {% if selected_volume == volume %}selected{% endif %}>{{ volume }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="row">
           <label for="query">Search query</label>
           <input id="query" name="query" value="{{ query }}" placeholder="e.g. Cuba missile" />
         </div>
@@ -42,7 +52,7 @@
 
         <div class="button-row">
           <button type="submit">Run search</button>
-          <a class="secondary" href="/?query={{ query|urlencode }}&max_results={{ max_results }}&source_mode=default">Shareable URL mode</a>
+          <a class="secondary" href="/?selected_volume={{ selected_volume|urlencode }}&query={{ query|urlencode }}&max_results={{ max_results }}&source_mode=default">Shareable URL mode</a>
         </div>
       </form>
 
