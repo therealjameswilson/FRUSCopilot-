@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FRUS Web Interface</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 2rem; max-width: 1000px; }
+      .container { display: grid; gap: 1rem; }
+      .error { color: #a30000; font-weight: 600; }
+      .muted { color: #666; font-size: 0.95rem; }
+      input[type='text'] { width: 100%; padding: 0.5rem; font-size: 1rem; }
+      button { padding: 0.6rem 1rem; font-size: 1rem; cursor: pointer; }
+      .doc { border: 1px solid #ddd; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.75rem; }
+      .doc h3 { margin-top: 0; }
+      pre { white-space: pre-wrap; line-height: 1.35; margin: 0; }
+      code { background: #f2f2f2; padding: 0.1rem 0.3rem; border-radius: 4px; }
+      select { width: 100%; padding: 0.5rem; }
+    </style>
+  </head>
+  <body>
+    <h1>FRUS XML Explorer</h1>
+    <p class="muted">Enter a repository-relative XML file path (for example <code>data/frus/volumes/your-file.xml</code>) or select from detected files.</p>
+
+    <form method="post" class="container">
+      <label for="quick-pick"><strong>Detected XML files</strong></label>
+      <select id="quick-pick" onchange="document.getElementById('file_path').value=this.value">
+        <option value="">-- Select a file --</option>
+        {% for xml in xml_files %}
+        <option value="{{ xml }}">{{ xml }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="file_path"><strong>File path</strong></label>
+      <input id="file_path" name="file_path" type="text" value="{{ selected_file }}" placeholder="data/frus/volumes/...xml" />
+      <button type="submit">Parse XML</button>
+    </form>
+
+    {% if error_message %}
+    <p class="error">{{ error_message }}</p>
+    {% endif %}
+
+    {% if selected_file and not error_message %}
+    <h2>Documents extracted: {{ documents|length }}</h2>
+    {% if documents %}
+      {% for doc in documents[:10] %}
+      <article class="doc">
+        <h3>{{ doc.title or 'Untitled document' }}</h3>
+        <pre>{{ doc.text[:1500] }}{% if doc.text|length > 1500 %}...{% endif %}</pre>
+      </article>
+      {% endfor %}
+      {% if documents|length > 10 %}
+      <p class="muted">Showing first 10 documents only.</p>
+      {% endif %}
+    {% else %}
+      <p>No document nodes were found in this file.</p>
+    {% endif %}
+    {% endif %}
+  </body>
+</html>
