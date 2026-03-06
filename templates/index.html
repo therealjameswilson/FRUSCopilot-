@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FRUS Copilot</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>FRUS Copilot</h1>
+      <p class="subhead">Search FRUS TEI XML document text in one place.</p>
+
+      <form method="post" enctype="multipart/form-data" class="controls">
+        <div class="row">
+          <label for="query">Search query</label>
+          <input id="query" name="query" value="{{ query }}" placeholder="e.g. Cuba missile" />
+        </div>
+
+        <div class="row">
+          <label for="max_results">Max results</label>
+          <input id="max_results" name="max_results" type="number" min="1" max="200" value="{{ max_results }}" />
+        </div>
+
+        <fieldset>
+          <legend>Data source</legend>
+          <label>
+            <input type="radio" name="source_mode" value="default" {% if source_mode == 'default' %}checked{% endif %}>
+            Local folder (<code>data/frus/volumes</code>)
+          </label>
+          <label>
+            <input type="radio" name="source_mode" value="upload" {% if source_mode == 'upload' %}checked{% endif %}>
+            Upload one XML file
+          </label>
+          <input type="file" name="xml_file" accept=".xml" />
+        </fieldset>
+
+        <button type="submit">Run</button>
+      </form>
+
+      <section class="stats">
+        <p><strong>Total docs loaded:</strong> {{ stats.total_documents }}</p>
+        <p><strong>Matches:</strong> {{ stats.matching_documents }}</p>
+        <p><strong>Shown:</strong> {{ stats.shown_documents }}</p>
+      </section>
+
+      {% if errors %}
+      <section class="errors">
+        <h2>Warnings</h2>
+        <ul>
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
+      <section>
+        <h2>Results</h2>
+        {% if docs %}
+          {% for doc in docs %}
+            <article class="card">
+              <h3>{{ doc.title }}</h3>
+              <p class="meta">Source: {{ doc.source }}</p>
+              <p>{{ doc.text[:900] }}{% if doc.text|length > 900 %}…{% endif %}</p>
+            </article>
+          {% endfor %}
+        {% else %}
+          <p>No documents found. If your folder is empty, try uploading a sample XML file.</p>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>
