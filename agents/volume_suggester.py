@@ -10,12 +10,21 @@ DATABASE_DIR = BASE_DIR / "database"
 VECTORS_PATH = DATABASE_DIR / "frus_vectors.npy"
 VECTOR_IDS_PATH = DATABASE_DIR / "frus_vector_ids.json"
 
-if not os.getenv("OPENAI_API_KEY"):
-    raise EnvironmentError("Missing OPENAI_API_KEY environment variable.")
-
-client = OpenAI()
+_client: OpenAI | None = None
 _vectors: np.ndarray | None = None
 _vector_ids: list[str] | None = None
+
+
+def _get_client() -> OpenAI:
+    global _client
+
+    if _client is None:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise EnvironmentError("Missing OPENAI_API_KEY environment variable.")
+        _client = OpenAI(api_key=api_key)
+
+    return _client
 
 
 def _load_vectors() -> np.ndarray:
@@ -52,7 +61,7 @@ def _get_vector_data() -> tuple[np.ndarray, list[str] | None]:
 
 
 def embed_query(query):
-    response = client.embeddings.create(
+    response = _get_client().embeddings.create(
         model="text-embedding-3-large",
         input=query,
     )
@@ -95,7 +104,7 @@ Prioritize:
 Return a short list.
 """
 
-    response = client.responses.create(
+    response = _get_client().responses.create(
         model="gpt-5",
         input=prompt,
     )
@@ -127,7 +136,7 @@ Focus on:
 Return likely collections to search.
 """
 
-    response = client.responses.create(
+    response = _get_client().responses.create(
         model="gpt-5",
         input=prompt,
     )
