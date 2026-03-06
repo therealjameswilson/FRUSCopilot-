@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Iterable
 import xml.etree.ElementTree as ET
@@ -7,9 +8,12 @@ import xml.etree.ElementTree as ET
 from flask import Flask, render_template, request
 
 app = Flask(__name__)
+app.config["FRUS_DATA_DIR"] = os.getenv("FRUS_DATA_DIR")
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_FRUS_DIR = BASE_DIR / "data" / "frus" / "volumes"
+MAX_ALLOWED_RESULTS = 200
+DEFAULT_RESULT_COUNT = 25
 
 
 def parse_volume(file_path: Path) -> list[dict[str, str]]:
@@ -61,20 +65,40 @@ def load_documents(folder: Path) -> tuple[list[dict[str, str]], list[str]]:
     return documents, errors
 
 
+def get_data_dir() -> Path:
+    configured = app.config.get("FRUS_DATA_DIR")
+    if configured:
+        return Path(configured)
+    return DEFAULT_FRUS_DIR
+
+
+def parse_max_results(raw_max_results: str | None) -> int:
+    try:
+        value = int(raw_max_results or DEFAULT_RESULT_COUNT)
+    except ValueError:
+        return DEFAULT_RESULT_COUNT
+    return max(1, min(value, MAX_ALLOWED_RESULTS))
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
-    query = request.values.get("query", "").strip()
-    max_results = int(request.values.get("max_results", 25))
+    if request.method == "POST":
+        query = request.form.get("query", "").strip()
+        source_mode = request.form.get("source_mode", "default")
+        max_results = parse_max_results(request.form.get("max_results"))
+    else:
+        query = request.args.get("query", "").strip()
+        source_mode = request.args.get("source_mode", "default")
+        max_results = parse_max_results(request.args.get("max_results"))
 
-    source_mode = request.values.get("source_mode", "default")
     docs: list[dict[str, str]] = []
     errors: list[str] = []
 
     if request.method == "POST" and source_mode == "upload":
         uploaded = request.files.get("xml_file")
+        tmp_path = BASE_DIR / ".uploaded_tmp.xml"
         if uploaded and uploaded.filename:
             try:
-                tmp_path = BASE_DIR / ".uploaded_tmp.xml"
                 uploaded.save(tmp_path)
                 docs = parse_volume(tmp_path)
             except Exception as exc:
@@ -85,7 +109,7 @@ def index():
         else:
             errors.append("Please choose an XML file to upload.")
     else:
-        docs, errors = load_documents(DEFAULT_FRUS_DIR)
+        docs, errors = load_documents(get_data_dir())
 
     filtered_docs = docs
     if query:
@@ -108,7 +132,13 @@ def index():
         docs=filtered_docs[:max_results],
         errors=errors,
         stats=stats,
+        data_dir=str(get_data_dir()),
     )
+
+
+@app.route("/healthz")
+def healthz():
+    return {"status": "ok"}
 
 
 if __name__ == "__main__":
