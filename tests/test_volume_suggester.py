@@ -86,3 +86,35 @@ def test_suggest_documents_accepts_selected_volume_kwarg(monkeypatch):
         "top_k": 10,
         "filters": {"volume_slug": "frus1969-76v34"},
     }
+
+
+def test_suggest_declassified_sources_returns_fallback_on_api_failure(monkeypatch):
+    class BrokenResponses:
+        def create(self, **kwargs):
+            raise TimeoutError("request timed out")
+
+    class BrokenClient:
+        responses = BrokenResponses()
+
+    monkeypatch.setattr(volume_suggester, "_get_client", lambda: BrokenClient())
+
+    output = volume_suggester.suggest_declassified_sources(topic="NSC system")
+
+    assert "timed out or failed" in output
+    assert "TimeoutError" in output
+
+
+def test_suggest_classified_archives_returns_fallback_on_api_failure(monkeypatch):
+    class BrokenResponses:
+        def create(self, **kwargs):
+            raise RuntimeError("boom")
+
+    class BrokenClient:
+        responses = BrokenResponses()
+
+    monkeypatch.setattr(volume_suggester, "_get_client", lambda: BrokenClient())
+
+    output = volume_suggester.suggest_classified_archives(topic="NSC system")
+
+    assert "timed out or failed" in output
+    assert "RuntimeError" in output
