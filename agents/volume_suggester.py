@@ -36,7 +36,19 @@ THEME_KEYWORDS: dict[str, dict[str, list[str]]] = {
 }
 
 
-def suggest_documents(topic: str, top_k: int = 20, volume_slug: str | None = None) -> list[dict]:
+def suggest_documents(
+    topic: str,
+    top_k: int = 20,
+    volume_slug: str | None = None,
+    *,
+    selected_volume: str | None = None,
+) -> list[dict]:
+    """Retrieve documents for a topic.
+
+    `selected_volume` is accepted for compatibility with callers that pass the
+    newer thematic-retrieval signature. It is currently unused in basic
+    retrieval mode.
+    """
     filters = {"volume_slug": volume_slug} if volume_slug else None
     return search(query=topic, top_k=top_k, filters=filters)
 
