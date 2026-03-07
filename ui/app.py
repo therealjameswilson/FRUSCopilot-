@@ -9,12 +9,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from agents.retriever import search
 from agents.volume_suggester import suggest_classified_archives, suggest_declassified_sources
-from config import CHUNKS_PATH, EMBEDDINGS_DB_PATH, MANIFEST_PATH
+from config import CHUNKS_PATH, EMBEDDINGS_DB_PATH
 
 st.set_page_config(page_title="FRUS Phase 1.1 Retriever", layout="wide")
 st.title("FRUS Phase 1.1 Local Retrieval")
 
-if not (CHUNKS_PATH.exists() and EMBEDDINGS_DB_PATH.exists() and MANIFEST_PATH.exists()):
+if not (CHUNKS_PATH.exists() and EMBEDDINGS_DB_PATH.exists()):
     st.warning(
         "FRUS index not found. Run `python3 scripts/sync_frus_repo.py` then `python3 scripts/build_frus_index.py`."
     )
