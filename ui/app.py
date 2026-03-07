@@ -10,8 +10,11 @@ import streamlit as st
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from agents.retriever import search
-from agents.volume_suggester import suggest_classified_archives, suggest_declassified_sources
+from agents.volume_suggester import (
+    retrieve_thematic_documents,
+    suggest_classified_archives,
+    suggest_declassified_sources,
+)
 from config import CHUNKS_PATH, EMBEDDINGS_DB_PATH, FRUS_REPO_DIR, FRUS_VOLUMES_DIR, MANIFEST_PATH
 
 
@@ -159,13 +162,19 @@ if selected_volume:
 
 if query:
     filters = {"volume_slug": volume_filter.strip()} if volume_filter.strip() else None
-    results = search(query=query, top_k=top_k, filters=filters)
+    results = retrieve_thematic_documents(
+        topic=query,
+        selected_volume=selected_volume,
+        top_k=top_k,
+        volume_slug=filters.get("volume_slug") if filters else None,
+    )
 
     st.subheader("FRUS Retrieval Results")
     if not results:
         st.info("No matching chunks found.")
 
     for item in results:
+        themes = item.get("matched_themes") or ["primary"]
         st.markdown(f"**{item.get('title') or '(untitled)'}**")
         st.write(
             f"volume_slug: {item.get('volume_slug')} | "
@@ -173,6 +182,7 @@ if query:
             f"date: {item.get('date') or 'unknown'} | "
             f"score: {item.get('score', 0):.4f}"
         )
+        st.caption(f"Matched themes/topics: {', '.join(themes)}")
         st.markdown(f"[Public URL]({item.get('history_state_url')})")
         st.caption(item.get("source_path"))
         with st.expander("Text chunk"):
@@ -180,7 +190,13 @@ if query:
         st.divider()
 
     with st.expander("Suggested declassified online sources"):
-        st.write(suggest_declassified_sources(query))
+        st.write(
+            suggest_declassified_sources(
+                topic=query,
+                selected_volume=selected_volume,
+                related_docs=results,
+            )
+        )
 
     with st.expander("Likely classified archival collections"):
         st.write(suggest_classified_archives(query))
