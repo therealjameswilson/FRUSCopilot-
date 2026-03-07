@@ -20,6 +20,10 @@ MAX_ALLOWED_RESULTS = 200
 DEFAULT_RESULT_COUNT = 25
 STATUS_PAGE_URL = "https://history.state.gov/historicaldocuments/status-of-the-series"
 TARGET_VOLUME_STATUSES = {"being researched", "planner"}
+MANUAL_VOLUME_OPTIONS = [
+    "Planned — 2001–2008, China Volumes",
+    "Planned — Road to 9/11 Volume",
+]
 
 
 class FRUSStatusParser(HTMLParser):
@@ -147,7 +151,9 @@ def get_volume_options() -> tuple[list[str], str | None]:
         html = fetch_status_page_html()
         options = extract_target_volume_names(html)
     except (URLError, TimeoutError, ValueError) as exc:
-        return [], f"Could not load volume options from {STATUS_PAGE_URL}: {exc}"
+        return MANUAL_VOLUME_OPTIONS[:], f"Could not load volume options from {STATUS_PAGE_URL}: {exc}"
+
+    options = sorted(set(options + MANUAL_VOLUME_OPTIONS))
 
     if not options:
         return [], "No 'Being Researched' or 'Planner' volumes were found on the status page."
