@@ -15,6 +15,89 @@ from agents.volume_suggester import suggest_classified_archives, suggest_declass
 from config import CHUNKS_PATH, EMBEDDINGS_DB_PATH, FRUS_REPO_DIR, FRUS_VOLUMES_DIR, MANIFEST_PATH
 
 
+TARGET_FRUS_VOLUMES: list[str] = [
+    "Being Researched — 1917–1972, Volume II, Public Diplomacy, The Interwar Period",
+    "Being Researched — 1917–1972, Volume III, Public Diplomacy, World War II",
+    "Being Researched — 1956–1960, The Intelligence Community",
+    "Being Researched — 1981–1988, Volume VIII, Western Europe, 1985–1988",
+    "Being Researched — 1981–1988, Volume XXIII, Iran-Contra Affair, 1985–1988",
+    "Being Researched — 1981–1988, Volume XXXVII, Trade; Monetary Policy; Industrialized Country Cooperation, 1985–1988",
+    "Being Researched — 1981–1988, Volume XLII, Refugees and Immigration, 1975–1984",
+    "Being Researched — 1981–1988, Volume XLV, Eastern Mediterranean",
+    "Being Researched — 1989–1992, Volume I, Foundations of Foreign Policy; Public Diplomacy",
+    "Being Researched — 1989–1992, Volume II, Organization and Management of Foreign Policy",
+    "Being Researched — 1989–1992, Volume IV, Soviet Union, Russia, and Post-Soviet States: Policy",
+    "Being Researched — 1989–1992, Volume V, Eastern Europe",
+    "Being Researched — 1989–1992, Volume VI, Eastern Mediterranean",
+    "Being Researched — 1989–1992, Volume VIII, Western Europe",
+    "Being Researched — 1989–1992, Volume IX, Germany",
+    "Being Researched — 1989–1992, Volume XIV, Arab-Israeli Dispute",
+    "Being Researched — 1989–1992, Volume XV, South Asia",
+    "Being Researched — 1989–1992, Volume XVI, Southeast Asia and the Pacific",
+    "Being Researched — 1989–1992, Volume XVIII, Japan; Korea",
+    "Being Researched — 1989–1992, Volume XX, North Africa; Sub-Saharan Africa",
+    "Being Researched — 1989–1992, Volume XXII, Cuba; Haiti; Caribbean",
+    "Being Researched — 1989–1992, Volume XXIII, Central America",
+    "Being Researched — 1989–1992, Volume XXIV, Panama, 1981–1992",
+    "Being Researched — 1989–1992, Volume XXV, South America",
+    "Being Researched — 1989–1992, Volume XXVII, Arms Control and Nonproliferation",
+    "Being Researched — 1989–1992, Volume XXX, Foreign Economic Policy",
+    "Being Researched — 1989–1992, Volume XXXII, Iran",
+    "Being Researched — 1993–2000, Volume I, Foundations of Foreign Policy",
+    "Being Researched — 1993–2000, Volume IV, Foreign Economic Policy, 1993–1996",
+    "Being Researched — 1993–2000, Volume XV, Wars in the Balkans, 1993–1995",
+    "Being Researched — 1993–2000, Volume XX, Arms Control and Nonproliferation within the Former Soviet Union, December 1991–December 1994",
+    "Being Researched — 1993–2000, Volume XXII, Europe: High-Level Contacts",
+    "Being Researched — 1993–2000, Volume XXIV, Europe: Policy, 1997–2000",
+    "Being Researched — 1993–2000, Volume XXV, Northern Ireland Peace Process",
+    "Being Researched — 1993–2000, Volume XXVII, South Africa; Southern Africa",
+    "Being Researched — 1993–2000, Volume XXVIII, Rwanda; Central Africa",
+    "Being Researched — 1993–2000, Volume XXXII, Central America",
+    "Planned — 1917–1972, Volume IV, Public Diplomacy, 1945–1952",
+    "Planned — 1917–1972, Volume V, Public Diplomacy, 1953–1960",
+    "Planned — 1989–1992, Volume XXVIII, Counternarcotics; Counterterrorism",
+    "Planned — 1989–1992, Volume XXIX, Global Issues",
+    "Planned — 1993–2000, Volume II, Organization and Management of Foreign Policy; Institutional Reform, 1992–1996",
+    "Planned — 1993–2000, Volume III, Organization and Management of Foreign Policy; Institutional Reform, 1997–2000",
+    "Planned — 1993–2000, Volume V, Foreign Economic Policy, 1997–2000",
+    "Planned — 1993–2000, Volume VI, National Security Policy",
+    "Planned — 1993–2000, Volume VII, Arms Control and Nonproliferation, 1993–1996",
+    "Planned — 1993–2000, Volume VIII, Arms Control and Nonproliferation, 1997–2000",
+    "Planned — 1993–2000, Volume IX, Counterterrorism Policy",
+    "Planned — 1993–2000, Volume X, Global Issues: Transnational Security; United Nations; Multilateral Peacekeeping",
+    "Planned — 1993–2000, Volume XI, Global Issues: Global Programs",
+    "Planned — 1993–2000, Volume XII, Global Issues: Rights and Governance",
+    "Planned — 1993–2000, Volume XIII, Global Issues: Transnational Commons",
+    "Planned — 1993–2000, Volume XIV, Public Diplomacy",
+    "Planned — 1993–2000, Volume XVI, Wars in the Balkans, 1995–2000",
+    "Planned — 1993–2000, Volume XVII, North Atlantic Treaty Organization; European Security",
+    "Planned — 1993–2000, Volume XVIII, Russia: High-Level Contacts",
+    "Planned — 1993–2000, Volume XIX, Russia: Policy",
+    "Planned — 1993–2000, Volume XXI, Ukraine; Belarus; Moldova; Transcaucasus; Central Asia",
+    "Planned — 1993–2000, Volume XXIII, Europe: Policy, 1993–1996",
+    "Planned — 1993–2000, Volume XXVI, Northern Africa",
+    "Planned — 1993–2000, Volume XXIX, Africa Region; Western Africa; Eastern Africa",
+    "Planned — 1993–2000, Volume XXX, North America",
+    "Planned — 1993–2000, Volume XXXI, Cuba; Haiti; Caribbean",
+    "Planned — 1993–2000, Volume XXXIII, South America; Latin America Region, 1993–1996",
+    "Planned — 1993–2000, Volume XXXIV, South America; Latin America Region, 1997–2000",
+    "Planned — 1993–2000, Volume XXXV, Middle East Peace Process, 1993–1996",
+    "Planned — 1993–2000, Volume XXXVI, Middle East Peace Process, 1997–2000",
+    "Planned — 1993–2000, Volume XXXVII, Iraq, 1993–1996",
+    "Planned — 1993–2000, Volume XXXVIII, Iraq, 1997–2000",
+    "Planned — 1993–2000, Volume XXXIX, Iran",
+    "Planned — 1993–2000, Volume XL, Middle East Region; Arabian Peninsula",
+    "Planned — 1993–2000, Volume XLI, China, 1993–1996",
+    "Planned — 1993–2000, Volume XLII, China, 1997–2000",
+    "Planned — 1993–2000, Volume XLIII, Japan; Korean Peninsula, 1993–1996",
+    "Planned — 1993–2000, Volume XLIV, Japan; Korean Peninsula, 1997–2000",
+    "Planned — 1993–2000, Volume XLV, South Asia, 1993–1996",
+    "Planned — 1993–2000, Volume XLVI, South Asia, 1997–2000",
+    "Planned — 1993–2000, Volume XLVII, Mainland Southeast Asia; East Asia Region",
+    "Planned — 1993–2000, Volume XLVIII, Indonesia; Philippines; Oceania; Pacific Region",
+]
+
+
 def ensure_local_index_files() -> bool:
     created_any = False
 
@@ -62,8 +145,17 @@ if created_placeholder_index:
     )
 
 query = st.text_input("Search topic")
+selected_volume = st.selectbox(
+    "FRUS volume you are working on",
+    options=TARGET_FRUS_VOLUMES,
+    index=None,
+    placeholder="Choose a volume",
+)
 volume_filter = st.text_input("Optional volume_slug filter (example: frus1969-76v34)")
 top_k = st.slider("Top K", min_value=5, max_value=50, value=20, step=5)
+
+if selected_volume:
+    st.caption(f"Selected working volume: {selected_volume}")
 
 if query:
     filters = {"volume_slug": volume_filter.strip()} if volume_filter.strip() else None
