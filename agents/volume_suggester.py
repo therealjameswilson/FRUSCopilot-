@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import re
+import os
 from collections import defaultdict
 
 from openai import OpenAI
 
 from agents.retriever import search
 from config import OPENAI_API_KEY
+
+
+SUGGESTER_TIMEOUT_SECONDS = float(os.getenv("FRUS_SUGGESTER_TIMEOUT_SECONDS", "25"))
 
 
 THEME_KEYWORDS: dict[str, dict[str, list[str]]] = {
@@ -114,7 +118,18 @@ def retrieve_thematic_documents(
 def _get_client() -> OpenAI:
     if not OPENAI_API_KEY:
         raise EnvironmentError("Missing OPENAI_API_KEY environment variable.")
-    return OpenAI(api_key=OPENAI_API_KEY)
+    return OpenAI(api_key=OPENAI_API_KEY, timeout=SUGGESTER_TIMEOUT_SECONDS)
+
+
+def _request_suggestions(prompt: str, fallback_label: str) -> str:
+    try:
+        response = _get_client().responses.create(model="gpt-5", input=prompt)
+        return response.output_text
+    except Exception as exc:
+        return (
+            f"{fallback_label} suggestion timed out or failed ({exc.__class__.__name__}). "
+            "Please try again in a moment or reduce result scope."
+        )
 
 
 def suggest_declassified_sources(topic: str, selected_volume: str | None = None, related_docs: list[dict] | None = None) -> str:
@@ -156,8 +171,7 @@ Return 8-12 bullet points. For each bullet include:
 
 When possible, prefer links that could be printed or cited directly in FRUS (digitized scans, PDFs, or stable document pages).
 """
-    response = _get_client().responses.create(model="gpt-5", input=prompt)
-    return response.output_text
+    return _request_suggestions(prompt, fallback_label="Declassified source")
 
 
 def suggest_classified_archives(topic: str, selected_volume: str | None = None) -> str:
@@ -178,5 +192,4 @@ Prioritize likely U.S. government holdings and collection-level hints:
 Return 8-12 bullet points with likely record groups/collection names.
 For each bullet, add one short reason it is likely to matter for the active FRUS volume.
 """
-    response = _get_client().responses.create(model="gpt-5", input=prompt)
-    return response.output_text
+    return _request_suggestions(prompt, fallback_label="Classified archive")

@@ -72,6 +72,11 @@ def call_classified_archives_suggester(*, topic: str, selected_volume: str | Non
     return suggest_classified_archives(**call_kwargs)
 
 
+def build_suggestion_request_key(query: str, selected_volume: str | None, results: list[dict]) -> str:
+    chunk_ids = [str(item.get("chunk_id") or item.get("history_state_url") or "") for item in results[:12]]
+    return "|".join([query, selected_volume or "", *chunk_ids])
+
+
 TARGET_FRUS_VOLUMES: list[str] = [
     "Being Researched — 1917–1972, Volume II, Public Diplomacy, The Interwar Period",
     "Being Researched — 1917–1972, Volume III, Public Diplomacy, World War II",
@@ -262,19 +267,41 @@ if query:
             st.write(item.get("text"))
         st.divider()
 
+    request_key = build_suggestion_request_key(query, selected_volume, results)
+
+    if st.session_state.get("declassified_request_key") != request_key:
+        st.session_state["declassified_request_key"] = request_key
+        st.session_state["declassified_response"] = None
+
+    if st.session_state.get("classified_request_key") != request_key:
+        st.session_state["classified_request_key"] = request_key
+        st.session_state["classified_response"] = None
+
     with st.expander("Suggested declassified online sources (compiler-focused)"):
-        st.write(
-            call_declassified_sources_suggester(
-                topic=query,
-                selected_volume=selected_volume,
-                related_docs=results,
-            )
-        )
+        if st.button("Generate declassified source suggestions", key="generate_declassified_sources"):
+            with st.spinner("Generating declassified source suggestions..."):
+                st.session_state["declassified_response"] = call_declassified_sources_suggester(
+                    topic=query,
+                    selected_volume=selected_volume,
+                    related_docs=results,
+                )
+
+        declassified_response = st.session_state.get("declassified_response")
+        if declassified_response:
+            st.write(declassified_response)
+        else:
+            st.caption("Click the button to run declassified source search for this query.")
 
     with st.expander("Likely closed or partially closed archival repositories"):
-        st.write(
-            call_classified_archives_suggester(
-                topic=query,
-                selected_volume=selected_volume,
-            )
-        )
+        if st.button("Generate closed-archive suggestions", key="generate_classified_archives"):
+            with st.spinner("Generating closed-archive suggestions..."):
+                st.session_state["classified_response"] = call_classified_archives_suggester(
+                    topic=query,
+                    selected_volume=selected_volume,
+                )
+
+        classified_response = st.session_state.get("classified_response")
+        if classified_response:
+            st.write(classified_response)
+        else:
+            st.caption("Click the button to run closed-archive suggestion search for this query.")
