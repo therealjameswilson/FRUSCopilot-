@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import os
+import sys
+
 import subprocess
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from config import FRUS_GIT_URL, FRUS_REPO_DIR
 
