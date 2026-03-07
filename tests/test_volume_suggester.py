@@ -26,7 +26,7 @@ def test_retrieve_thematic_documents_merges_duplicates_and_tags_themes(monkeypat
         ],
     }
 
-    def fake_search(query: str, top_k: int = 20, filters=None):
+    def fake_search(query: str, top_k: int = 20, filters=None, strategy="hybrid"):
         if "SALT negotiations strategic arms limitation talks ABM Treaty" in query:
             return [
                 {
@@ -65,7 +65,7 @@ def test_retrieve_thematic_documents_merges_duplicates_and_tags_themes(monkeypat
 def test_suggest_documents_accepts_selected_volume_kwarg(monkeypatch):
     captured = {}
 
-    def fake_search(query: str, top_k: int = 20, filters=None):
+    def fake_search(query: str, top_k: int = 20, filters=None, strategy="hybrid"):
         captured["query"] = query
         captured["top_k"] = top_k
         captured["filters"] = filters
@@ -118,3 +118,65 @@ def test_suggest_classified_archives_returns_fallback_on_api_failure(monkeypatch
 
     assert "timed out or failed" in output
     assert "RuntimeError" in output
+
+
+
+def test_infer_search_plan_returns_heuristic_without_api_key(monkeypatch):
+    monkeypatch.setattr(volume_suggester, "OPENAI_API_KEY", None)
+
+    plan = volume_suggester.infer_search_plan(
+        topic="Scowcroft system",
+        selected_volume="Being Researched — 1989–1992, Volume II, Organization and Management of Foreign Policy",
+    )
+
+    assert plan["normalized_topic"] == "Scowcroft system"
+    assert any("Brent Scowcroft" in q for q in plan["query_rewrites"])
+
+
+def test_retrieve_compiler_assist_documents_uses_inference_fallback(monkeypatch):
+    calls = []
+
+    def fake_search(query: str, top_k: int = 20, filters=None, strategy="hybrid"):
+        calls.append(query)
+        if query == "Scowcroft system":
+            return [
+                {
+                    "chunk_id": "c1",
+                    "title": "Policy Note",
+                    "text": "A note on NSC process and staffing.",
+                    "volume_slug": "frus1989-92v01",
+                    "document_number": "3",
+                    "history_state_url": "https://history.state.gov/historicaldocuments/frus1989-92v01/d3",
+                    "score": 0.4,
+                    "source_type": "frus_github",
+                }
+            ]
+        if "Brent Scowcroft" in query:
+            return [
+                {
+                    "chunk_id": "c2",
+                    "title": "Memorandum for Scowcroft",
+                    "text": "Memorandum on White House foreign policy process.",
+                    "volume_slug": "frus1989-92v01",
+                    "document_number": "11",
+                    "history_state_url": "https://history.state.gov/historicaldocuments/frus1989-92v01/d11",
+                    "score": 0.7,
+                    "source_type": "frus_github",
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(volume_suggester, "search", fake_search)
+    monkeypatch.setattr(volume_suggester, "OPENAI_API_KEY", None)
+
+    payload = volume_suggester.retrieve_compiler_assist_documents(
+        topic="Scowcroft system",
+        selected_volume="Being Researched — 1989–1992, Volume II, Organization and Management of Foreign Policy",
+        top_k=5,
+        min_exact_results=5,
+    )
+
+    assert payload["used_inference"] is True
+    assert payload["results"]
+    assert payload["brief"]["top_documents"]
+    assert "Brent Scowcroft" in " ".join(calls)

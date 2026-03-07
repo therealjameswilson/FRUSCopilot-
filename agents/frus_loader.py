@@ -13,16 +13,23 @@ VOLUME_START_YEAR_RE = re.compile(r"^frus(\d{4})", re.IGNORECASE)
 DATE_LINE_RE = re.compile(
     r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\b"
 )
+YEAR_SPAN_RE = re.compile(r"frus(\d{4})(?:-(\d{2,4}))?", re.IGNORECASE)
 
 
 @dataclass
 class FrusDocument:
     volume_slug: str
+    volume_title: str | None
+    years: str | None
+    administration: str | None
     document_number: str
     title: str | None
     date: str | None
+    chapter_title: str | None
+    section_title: str | None
     history_state_url: str
     source_path: str
+    source_type: str
     text: str
 
 
@@ -67,6 +74,57 @@ def extract_title_and_date(text: str) -> tuple[str | None, str | None]:
     return title, date
 
 
+def infer_years(volume_slug: str) -> str | None:
+    match = YEAR_SPAN_RE.search(volume_slug)
+    if not match:
+        return None
+    start = match.group(1)
+    end = match.group(2)
+    if not end:
+        return start
+    if len(end) == 2:
+        century = start[:2]
+        end = f"{century}{end}"
+    return f"{start}-{end}"
+
+
+def infer_administration(years: str | None) -> str | None:
+    if not years:
+        return None
+    start = int(years.split("-")[0])
+    if start >= 1993:
+        return "Clinton"
+    if start >= 1989:
+        return "George H. W. Bush"
+    if start >= 1981:
+        return "Reagan"
+    if start >= 1977:
+        return "Carter"
+    if start >= 1974:
+        return "Ford"
+    if start >= 1969:
+        return "Nixon"
+    if start >= 1963:
+        return "Johnson"
+    if start >= 1961:
+        return "Kennedy"
+    return None
+
+
+def extract_section_metadata(text: str) -> tuple[str | None, str | None]:
+    chapter = None
+    section = None
+    for ln in text.splitlines()[:80]:
+        stripped = ln.strip()
+        if stripped.startswith("## ") and not chapter:
+            chapter = stripped[3:].strip()
+        if stripped.startswith("### ") and not section:
+            section = stripped[4:].strip()
+        if chapter and section:
+            break
+    return chapter, section
+
+
 def load_documents(volumes_root: Path, repo_root: Path) -> Iterator[FrusDocument]:
     for file_path in sorted(volumes_root.rglob("d*.md")):
         volume_slug = infer_volume_slug(file_path, volumes_root)
@@ -82,15 +140,23 @@ def load_documents(volumes_root: Path, repo_root: Path) -> Iterator[FrusDocument
             continue
 
         title, date = extract_title_and_date(text)
+        chapter_title, section_title = extract_section_metadata(text)
         source_path = str(file_path.relative_to(repo_root))
+        years = infer_years(volume_slug)
 
         yield FrusDocument(
             volume_slug=volume_slug,
+            volume_title=volume_slug,
+            years=years,
+            administration=infer_administration(years),
             document_number=document_number,
             title=title,
             date=date,
+            chapter_title=chapter_title,
+            section_title=section_title,
             history_state_url=build_history_state_url(volume_slug, document_number),
             source_path=source_path,
+            source_type="frus_github",
             text=text,
         )
 
@@ -129,10 +195,20 @@ def chunk_document(document: FrusDocument, max_chars: int = MAX_CHARS_PER_CHUNK)
             {
                 "chunk_id": chunk_id,
                 "volume_slug": document.volume_slug,
+                "volume_title": document.volume_title,
+                "years": document.years,
+                "administration": document.administration,
                 "document_number": document.document_number,
+                "doc_number": document.document_number,
                 "title": document.title,
+                "doc_title": document.title,
                 "date": document.date,
+                "doc_date": document.date,
+                "chapter_title": document.chapter_title,
+                "section_title": document.section_title,
                 "history_state_url": document.history_state_url,
+                "source_url": document.history_state_url,
+                "source_type": document.source_type,
                 "source_path": document.source_path,
                 "text": piece,
             }

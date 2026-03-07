@@ -20,6 +20,21 @@ python app.py
 
 Open `http://localhost:8000`.
 
+## Compiler Assist (Inference Mode)
+
+The Streamlit app now supports two retrieval modes:
+
+- **Exact Retrieval**: regular FRUS retrieval behavior.
+- **Compiler Assist (Inference Mode)**: inference/planning + multi-query retrieval + reranking + a structured compiler brief.
+
+Compiler Assist keeps retrieval scoped to FRUS-approved corpora only (history.state.gov FRUS URLs represented in the local chunk index and chunked content from `HistoryAtState/frus`). If literal matches are sparse, it transparently falls back to inference-expanded FRUS retrieval and explains that the exact phrase was missing.
+
+Run the Streamlit UI:
+
+```bash
+streamlit run ui/app.py
+```
+
 ## Public share link from this repo
 
 A static, browser-only version of the FRUS interface is available at `docs/index.html`.

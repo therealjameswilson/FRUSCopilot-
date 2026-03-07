@@ -20,6 +20,11 @@ retrieve_thematic_documents = getattr(
     "retrieve_thematic_documents",
     volume_suggester.suggest_documents,
 )
+retrieve_compiler_assist_documents = getattr(
+    volume_suggester,
+    "retrieve_compiler_assist_documents",
+    None,
+)
 suggest_classified_archives = volume_suggester.suggest_classified_archives
 suggest_declassified_sources = volume_suggester.suggest_declassified_sources
 
@@ -217,6 +222,7 @@ if created_placeholder_index:
     )
 
 query = st.text_input("Search topic")
+mode = st.radio("Search mode", ["Exact Retrieval", "Compiler Assist (Inference Mode)"], horizontal=True)
 selected_volume = st.selectbox(
     "Current FRUS volume being compiled",
     options=TARGET_FRUS_VOLUMES,
@@ -231,23 +237,71 @@ if selected_volume:
 
 if query:
     volume_slug = volume_filter.strip() or None
+
     call_kwargs: dict[str, object] = {
         "topic": query,
         "top_k": top_k,
     }
-    retrieval_signature = inspect.signature(retrieve_thematic_documents)
 
-    if "selected_volume" in retrieval_signature.parameters:
+    if mode == "Compiler Assist (Inference Mode)" and retrieve_compiler_assist_documents:
         call_kwargs["selected_volume"] = selected_volume
-
-    if "filters" in retrieval_signature.parameters:
-        call_kwargs["filters"] = {"volume_slug": volume_slug} if volume_slug else None
-    elif "volume_slug" in retrieval_signature.parameters:
         call_kwargs["volume_slug"] = volume_slug
+        assist_payload = retrieve_compiler_assist_documents(**call_kwargs)
+        results = assist_payload.get("results", [])
+        brief = assist_payload.get("brief", {})
+        plan = assist_payload.get("plan", {})
 
-    results = retrieve_thematic_documents(**call_kwargs)
+        st.subheader("Compiler Assist Brief")
+        st.write(f"**1. Exact phrase status:** {brief.get('exact_phrase_status', 'Unknown')}" )
+        st.write(f"**2. Interpreted topic:** {brief.get('interpreted_topic', query)}")
 
-    st.subheader("FRUS Retrieval Results")
+        if assist_payload.get("used_inference"):
+            st.warning(
+                "Inference-expanded retrieval is active because exact retrieval was sparse. "
+                "Only FRUS-indexed sources were searched."
+            )
+            with st.expander("Search planning details"):
+                st.json(plan)
+
+        st.markdown("**3. Top relevant documents**")
+        for idx, doc in enumerate(brief.get("top_documents", []), start=1):
+            st.markdown(
+                f"{idx}. [{doc.get('title')}]({doc.get('url')}) "
+                f"— {doc.get('volume_slug')} | {doc.get('date')}"
+            )
+            st.caption(doc.get("why_useful"))
+
+        st.markdown("**4. Key themes and topics**")
+        for theme in brief.get("key_themes", []):
+            st.markdown(f"- {theme}")
+
+        st.markdown("**5. Why these matter for compilation**")
+        for line in brief.get("why_these_matter", []):
+            st.markdown(f"- {line}")
+
+        st.markdown("**6. Likely document families to pursue**")
+        for family in brief.get("likely_document_families", []):
+            st.markdown(f"- {family}")
+
+        st.markdown("**7. Analog volumes or sections**")
+        for analog in brief.get("analog_volumes_or_sections", []):
+            st.markdown(f"- {analog}")
+
+        st.subheader("Supporting FRUS Retrieval Results")
+    else:
+        retrieval_signature = inspect.signature(retrieve_thematic_documents)
+
+        if "selected_volume" in retrieval_signature.parameters:
+            call_kwargs["selected_volume"] = selected_volume
+
+        if "filters" in retrieval_signature.parameters:
+            call_kwargs["filters"] = {"volume_slug": volume_slug} if volume_slug else None
+        elif "volume_slug" in retrieval_signature.parameters:
+            call_kwargs["volume_slug"] = volume_slug
+
+        results = retrieve_thematic_documents(**call_kwargs)
+        st.subheader("FRUS Retrieval Results")
+
     if not results:
         st.info("No matching chunks found.")
 
