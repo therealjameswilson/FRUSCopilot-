@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import inspect
 import sqlite3
 import sys
 from datetime import UTC, datetime
@@ -166,13 +167,22 @@ if selected_volume:
     st.caption(f"Selected working volume: {selected_volume}")
 
 if query:
-    filters = {"volume_slug": volume_filter.strip()} if volume_filter.strip() else None
-    results = retrieve_thematic_documents(
-        topic=query,
-        selected_volume=selected_volume,
-        top_k=top_k,
-        volume_slug=filters.get("volume_slug") if filters else None,
-    )
+    volume_slug = volume_filter.strip() or None
+    call_kwargs: dict[str, object] = {
+        "topic": query,
+        "top_k": top_k,
+    }
+    retrieval_signature = inspect.signature(retrieve_thematic_documents)
+
+    if "selected_volume" in retrieval_signature.parameters:
+        call_kwargs["selected_volume"] = selected_volume
+
+    if "filters" in retrieval_signature.parameters:
+        call_kwargs["filters"] = {"volume_slug": volume_slug} if volume_slug else None
+    elif "volume_slug" in retrieval_signature.parameters:
+        call_kwargs["volume_slug"] = volume_slug
+
+    results = retrieve_thematic_documents(**call_kwargs)
 
     st.subheader("FRUS Retrieval Results")
     if not results:
