@@ -21,8 +21,8 @@ DEFAULT_RESULT_COUNT = 25
 STATUS_PAGE_URL = "https://history.state.gov/historicaldocuments/status-of-the-series"
 TARGET_VOLUME_STATUSES = {"being researched", "planner"}
 MANUAL_VOLUME_OPTIONS = [
-    "Planned — 2001–2008, China Volumes",
-    "Planned — Road to 9/11 Volume",
+    "China, 2001-2008",
+    "Counterterrorism, 2001",
 ]
 
 
