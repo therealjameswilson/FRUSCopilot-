@@ -189,8 +189,19 @@ def ensure_local_index_files() -> bool:
 
     return created_any
 
-st.set_page_config(page_title="FRUS Phase 1.1 Retriever", layout="wide")
-st.title("FRUS Phase 1.1 Local Retrieval")
+st.set_page_config(page_title="FRUS Compiler Copilot Beta", layout="wide")
+st.title("FRUS Compiler Copilot Beta")
+st.markdown(
+    """
+### What this app can do for a FRUS compiler
+- Search the local FRUS vector index by topic to quickly surface relevant passages.
+- Prioritize results for the volume you are actively compiling.
+- Narrow retrieval to a specific `volume_slug` when you need highly targeted context.
+- Return ranked chunks with document metadata, source file paths, and direct public URLs.
+- Show matched themes/topics for each hit so you can see why a result appeared.
+- Suggest related declassified online sources using the current query and retrieved documents.
+"""
+)
 
 created_placeholder_index = ensure_local_index_files()
 
