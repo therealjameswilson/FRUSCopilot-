@@ -4,9 +4,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import (
+    MANUAL_VOLUME_OPTIONS,
     app,
     doc_matches_volume,
     extract_target_volume_names,
+    get_volume_options,
     parse_max_results,
     parse_volume,
 )
@@ -55,3 +57,32 @@ def test_doc_matches_volume_by_source_name():
     doc = {"source": "frus1969-76v11.xml", "title": "Doc", "text": "Body"}
     assert doc_matches_volume(doc, "FRUS 1969-76, Volume XI")
     assert not doc_matches_volume(doc, "FRUS 1969-76, Volume XII")
+
+
+def test_get_volume_options_includes_manual_entries(monkeypatch):
+    html = """
+    <table>
+      <tr><td><a href='/historicaldocuments/frus1969-76v11'>Vol XI</a></td><td>Being Researched</td></tr>
+    </table>
+    """
+
+    monkeypatch.setattr("app.fetch_status_page_html", lambda: html)
+
+    options, error = get_volume_options()
+
+    assert error is None
+    assert "Vol XI" in options
+    for manual in MANUAL_VOLUME_OPTIONS:
+        assert manual in options
+
+
+def test_get_volume_options_falls_back_to_manual_entries(monkeypatch):
+    def raise_error():
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr("app.fetch_status_page_html", raise_error)
+
+    options, error = get_volume_options()
+
+    assert options == MANUAL_VOLUME_OPTIONS
+    assert "Could not load volume options" in error
