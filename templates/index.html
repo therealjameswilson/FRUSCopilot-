@@ -16,7 +16,7 @@
         <p><strong>Local corpus path:</strong> <code>{{ data_dir }}</code></p>
       </section>
 
-      <form method="post" enctype="multipart/form-data" class="controls">
+      <form method="post" enctype="multipart/form-data" class="controls" id="search-form">
         <div class="row">
           <label for="selected_volume">FRUS volume</label>
           <select id="selected_volume" name="selected_volume" required>
@@ -51,8 +51,12 @@
         </fieldset>
 
         <div class="button-row">
-          <button type="submit">Run search</button>
+          <button type="submit" id="run-search-button">Run search</button>
           <a class="secondary" href="/?selected_volume={{ selected_volume|urlencode }}&query={{ query|urlencode }}&max_results={{ max_results }}&source_mode=default">Shareable URL mode</a>
+          <div class="loading-indicator" id="search-loading" aria-live="polite" role="status">
+            <span class="buckram-wheel" aria-hidden="true"></span>
+            <span>Searching declassified material…</span>
+          </div>
         </div>
       </form>
 
@@ -88,5 +92,18 @@
         {% endif %}
       </section>
     </main>
+    <script>
+      const searchForm = document.getElementById('search-form');
+      const searchLoading = document.getElementById('search-loading');
+      const runSearchButton = document.getElementById('run-search-button');
+
+      searchForm?.addEventListener('submit', () => {
+        searchLoading?.classList.add('active');
+        if (runSearchButton) {
+          runSearchButton.disabled = true;
+          runSearchButton.textContent = 'Searching…';
+        }
+      });
+    </script>
   </body>
 </html>
