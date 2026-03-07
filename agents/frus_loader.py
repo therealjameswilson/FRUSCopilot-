@@ -9,6 +9,7 @@ from typing import Iterator
 from config import MAX_CHARS_PER_CHUNK
 
 DOC_FILENAME_RE = re.compile(r"^d(\d+)\.md$", re.IGNORECASE)
+VOLUME_START_YEAR_RE = re.compile(r"^frus(\d{4})", re.IGNORECASE)
 DATE_LINE_RE = re.compile(
     r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\b"
 )
@@ -39,6 +40,16 @@ def infer_document_number(file_path: Path) -> str | None:
     return match.group(1) if match else None
 
 
+def infer_volume_start_year(volume_slug: str) -> int | None:
+    match = VOLUME_START_YEAR_RE.match(volume_slug)
+    return int(match.group(1)) if match else None
+
+
+def is_supported_volume_slug(volume_slug: str, min_start_year: int = 1961) -> bool:
+    start_year = infer_volume_start_year(volume_slug)
+    return start_year is not None and start_year >= min_start_year
+
+
 def build_history_state_url(volume_slug: str, document_number: str) -> str:
     return f"https://history.state.gov/historicaldocuments/{volume_slug}/d{document_number}"
 
@@ -58,6 +69,10 @@ def extract_title_and_date(text: str) -> tuple[str | None, str | None]:
 
 def load_documents(volumes_root: Path, repo_root: Path) -> Iterator[FrusDocument]:
     for file_path in sorted(volumes_root.rglob("d*.md")):
+        volume_slug = infer_volume_slug(file_path, volumes_root)
+        if not is_supported_volume_slug(volume_slug):
+            continue
+
         document_number = infer_document_number(file_path)
         if not document_number:
             continue
@@ -66,7 +81,6 @@ def load_documents(volumes_root: Path, repo_root: Path) -> Iterator[FrusDocument
         if not text:
             continue
 
-        volume_slug = infer_volume_slug(file_path, volumes_root)
         title, date = extract_title_and_date(text)
         source_path = str(file_path.relative_to(repo_root))
 
