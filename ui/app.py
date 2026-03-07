@@ -208,7 +208,6 @@ if query:
         st.write(
             suggest_declassified_sources(
                 topic=query,
-                selected_volume=selected_volume,
                 related_docs=results,
             )
         )
