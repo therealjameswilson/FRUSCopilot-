@@ -60,3 +60,29 @@ def test_retrieve_thematic_documents_merges_duplicates_and_tags_themes(monkeypat
     assert out[0]["score"] == 0.9
     assert "primary" in out[0]["matched_themes"]
     assert "arms_control_nonproliferation" in out[0]["matched_themes"]
+
+
+def test_suggest_documents_accepts_selected_volume_kwarg(monkeypatch):
+    captured = {}
+
+    def fake_search(query: str, top_k: int = 20, filters=None):
+        captured["query"] = query
+        captured["top_k"] = top_k
+        captured["filters"] = filters
+        return [{"chunk_id": "c1", "score": 1.0}]
+
+    monkeypatch.setattr(volume_suggester, "search", fake_search)
+
+    out = volume_suggester.suggest_documents(
+        topic="arms control",
+        top_k=10,
+        volume_slug="frus1969-76v34",
+        selected_volume="Being Researched — 1993–2000, Volume XX",
+    )
+
+    assert out == [{"chunk_id": "c1", "score": 1.0}]
+    assert captured == {
+        "query": "arms control",
+        "top_k": 10,
+        "filters": {"volume_slug": "frus1969-76v34"},
+    }
