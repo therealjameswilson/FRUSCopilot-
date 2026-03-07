@@ -1,168 +1,57 @@
-import json
-import os
-from pathlib import Path
+from __future__ import annotations
 
-import numpy as np
 from openai import OpenAI
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATABASE_DIR = BASE_DIR / "database"
-VECTORS_PATH = DATABASE_DIR / "frus_vectors.npy"
-VECTOR_IDS_PATH = DATABASE_DIR / "frus_vector_ids.json"
+from agents.retriever import search
+from config import OPENAI_API_KEY
 
-_client: OpenAI | None = None
-_vectors: np.ndarray | None = None
-_vector_ids: list[str] | None = None
+
+def suggest_documents(topic: str, top_k: int = 20, volume_slug: str | None = None) -> list[dict]:
+    filters = {"volume_slug": volume_slug} if volume_slug else None
+    return search(query=topic, top_k=top_k, filters=filters)
 
 
 def _get_client() -> OpenAI:
-    global _client
-
-    if _client is None:
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise EnvironmentError("Missing OPENAI_API_KEY environment variable.")
-        _client = OpenAI(api_key=api_key)
-
-    return _client
+    if not OPENAI_API_KEY:
+        raise EnvironmentError("Missing OPENAI_API_KEY environment variable.")
+    return OpenAI(api_key=OPENAI_API_KEY)
 
 
-def _load_vectors() -> np.ndarray:
-    if not VECTORS_PATH.exists():
-        raise FileNotFoundError(
-            "Missing vector file: database/frus_vectors.npy. "
-            "Run `python scripts/build_vectors.py` to generate it."
-        )
-
-    return np.load(VECTORS_PATH, allow_pickle=False)
-
-
-def _load_vector_ids(expected_count: int) -> list[str] | None:
-    if not VECTOR_IDS_PATH.exists():
-        return None
-
-    with VECTOR_IDS_PATH.open("r", encoding="utf-8") as file:
-        loaded_ids = json.load(file)
-
-    if isinstance(loaded_ids, list) and len(loaded_ids) == expected_count:
-        return [str(item) for item in loaded_ids]
-
-    return None
-
-
-def _get_vector_data() -> tuple[np.ndarray, list[str] | None]:
-    global _vectors, _vector_ids
-
-    if _vectors is None:
-        _vectors = _load_vectors()
-        _vector_ids = _load_vector_ids(len(_vectors))
-
-    return _vectors, _vector_ids
-
-
-def embed_query(query):
-    response = _get_client().embeddings.create(
-        model="text-embedding-3-large",
-        input=query,
-    )
-    return np.array(response.data[0].embedding)
-
-
-def suggest_documents(topic, top_k=20):
-    vectors, vector_ids = _get_vector_data()
-    query_vec = embed_query(topic)
-    scores = []
-
-    for i, vec in enumerate(vectors):
-        score = np.dot(query_vec, vec)
-        doc_ref = vector_ids[i] if vector_ids is not None else i
-        scores.append((doc_ref, score))
-
-    scores.sort(key=lambda x: x[1], reverse=True)
-    return scores[:top_k]
-
-
-def suggest_declassified_sources(topic):
+def suggest_declassified_sources(topic: str) -> str:
     prompt = f"""
-You are assisting historians compiling a FRUS volume.
+You are helping a FRUS historian researching: {topic}
 
-Suggest online sources containing declassified or
-born-unclassified U.S. government documents relevant to:
-
-{topic}
-
+Provide concise, practical online declassified or born-unclassified sources.
 Prioritize:
+- National Archives (NARA catalog and digitized records)
+- CIA FOIA Electronic Reading Room
+- Department of State FOIA releases
+- Presidential library digital archives
+- DoD FOIA/release reading rooms
+- Congressional hearings and committee records
+- Government Publishing Office (GovInfo)
 
-• National Archives (NARA)
-• CIA FOIA Electronic Reading Room
-• State Department FOIA releases
-• Presidential Library digital archives
-• Defense Department FOIA releases
-• Congressional hearings
-• Government Publishing Office
-
-Return a short list.
+Return 8-12 bullet points with specific collections/search entry points.
 """
-
-    response = _get_client().responses.create(
-        model="gpt-5",
-        input=prompt,
-    )
-
+    response = _get_client().responses.create(model="gpt-5", input=prompt)
     return response.output_text
 
 
-def suggest_classified_archives(topic):
+def suggest_classified_archives(topic: str) -> str:
     prompt = f"""
-You are assisting a FRUS historian.
+You are helping plan FRUS archival research for: {topic}
 
-If documents are not available online, suggest likely
-U.S. government archival collections that may contain
-still-classified or recently declassified material.
+Suggest likely archival collections that may contain still-classified,
+recently declassified, or hard-to-find records.
+Prioritize likely U.S. government holdings and collection-level hints:
+- Presidential library collections and NSC files
+- State Department lot files
+- RG 59 / NARA diplomatic records
+- Defense Department archives
+- CIA records and finding aids
+- Joint Chiefs of Staff files
 
-Topic:
-
-{topic}
-
-Focus on:
-
-• Presidential Library collections
-• National Security Council files
-• Department of State lot files
-• Defense Department archives
-• CIA operational files
-• Joint Chiefs of Staff files
-
-Return likely collections to search.
+Return 8-12 bullet points with likely record groups/collection names.
 """
-
-    response = _get_client().responses.create(
-        model="gpt-5",
-        input=prompt,
-    )
-
+    response = _get_client().responses.create(model="gpt-5", input=prompt)
     return response.output_text
-
-
-def main():
-    print("\nFRUS Volume Builder")
-    print("-------------------")
-
-    topic = input("\nEnter proposed FRUS volume topic: ")
-
-    results = suggest_documents(topic)
-
-    print("\nSuggested FRUS documents:\n")
-
-    for r in results:
-        print("Doc ID:", r[0], "| relevance:", round(r[1], 3))
-
-    print("\nDeclassified sources to search:\n")
-    print(suggest_declassified_sources(topic))
-
-    print("\nPossible classified archival collections:\n")
-    print(suggest_classified_archives(topic))
-
-
-if __name__ == "__main__":
-    main()
