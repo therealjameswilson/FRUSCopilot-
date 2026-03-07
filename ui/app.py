@@ -193,13 +193,12 @@ st.set_page_config(page_title="FRUS Compiler Copilot Beta", layout="wide")
 st.title("FRUS Compiler Copilot Beta")
 st.markdown(
     """
-### What this app can do for a FRUS compiler
-- Search the local FRUS vector index by topic to quickly surface relevant passages.
-- Prioritize results for the volume you are actively compiling.
-- Narrow retrieval to a specific `volume_slug` when you need highly targeted context.
-- Return ranked chunks with document metadata, source file paths, and direct public URLs.
-- Show matched themes/topics for each hit so you can see why a result appeared.
-- Suggest related declassified online sources using the current query and retrieved documents.
+### Mission: serve the FRUS compiler working on the current in-progress volume
+- Use the volume dropdown to anchor all help to the exact volume currently being compiled.
+- Surface relevant themes, topics, and useful analogs from earlier FRUS volumes.
+- Highlight prior-volume context (for example, 1960s economics coverage when compiling 1990s economics).
+- Return ranked chunks with source metadata and direct public URLs to support document selection decisions.
+- Suggest declassified online records and likely closed repositories where additional records may exist.
 """
 )
 
@@ -214,7 +213,7 @@ if created_placeholder_index:
 
 query = st.text_input("Search topic")
 selected_volume = st.selectbox(
-    "FRUS volume you are working on",
+    "Current FRUS volume being compiled",
     options=TARGET_FRUS_VOLUMES,
     index=None,
     placeholder="Choose a volume",
@@ -263,7 +262,7 @@ if query:
             st.write(item.get("text"))
         st.divider()
 
-    with st.expander("Suggested declassified online sources"):
+    with st.expander("Suggested declassified online sources (compiler-focused)"):
         st.write(
             call_declassified_sources_suggester(
                 topic=query,
@@ -272,7 +271,7 @@ if query:
             )
         )
 
-    with st.expander("Likely classified archival collections"):
+    with st.expander("Likely closed or partially closed archival repositories"):
         st.write(
             call_classified_archives_suggester(
                 topic=query,

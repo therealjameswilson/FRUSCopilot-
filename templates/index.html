@@ -9,7 +9,7 @@
   <body>
     <main class="container">
       <h1>FRUS Copilot</h1>
-      <p class="subhead">A browser interface for colleagues to explore FRUS TEI XML records.</p>
+      <p class="subhead">A browser interface built to serve FRUS compilers working on the current volume.</p>
 
       <section class="status-banner">
         <p><strong>Public mode:</strong> Share this page URL with your team when deployed.</p>
@@ -18,7 +18,7 @@
 
       <form method="post" enctype="multipart/form-data" class="controls" id="search-form">
         <div class="row">
-          <label for="selected_volume">FRUS volume</label>
+          <label for="selected_volume">Current FRUS volume being compiled</label>
           <select id="selected_volume" name="selected_volume" required>
             <option value="" {% if not selected_volume %}selected{% endif %} disabled>Select a volume from Being Researched or Planner</option>
             {% for volume in volume_options %}
@@ -28,7 +28,7 @@
         </div>
 
         <div class="row">
-          <label for="query">Search query</label>
+          <label for="query">Compiler research query</label>
           <input id="query" name="query" value="{{ query }}" placeholder="e.g. Cuba missile" />
         </div>
 
@@ -88,7 +88,7 @@
             </article>
           {% endfor %}
         {% else %}
-          <p>No documents found. If your folder is empty, try uploading a sample XML file.</p>
+          <p>No documents found. Refine the query for this active volume or upload a sample XML file for testing.</p>
         {% endif %}
       </section>
     </main>

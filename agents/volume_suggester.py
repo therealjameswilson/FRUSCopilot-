@@ -131,13 +131,14 @@ def suggest_declassified_sources(topic: str, selected_volume: str | None = None,
     related_docs_block = "\n".join(related_docs_lines) if related_docs_lines else "- None provided"
 
     prompt = f"""
-You are helping a FRUS historian researching: {topic}
-Working volume context: {selected_volume or 'Not specified'}
+You are serving a FRUS compiler who is actively compiling the current volume.
+Research topic: {topic}
+Current working volume from the dropdown: {selected_volume or 'Not specified'}
 
-Potentially related published FRUS documents:
+Potentially related published FRUS documents and prior-volume analogs:
 {related_docs_block}
 
-Provide concise, practical online declassified or born-unclassified sources.
+Provide concise, practical online declassified or born-unclassified sources that directly support compilation decisions for the current volume.
 Prioritize:
 - National Archives (NARA catalog and digitized records)
 - CIA FOIA Electronic Reading Room
@@ -150,7 +151,8 @@ Prioritize:
 Return 8-12 bullet points. For each bullet include:
 1) exact collection/document title,
 2) direct URL to a specific declassified document (not just a homepage),
-3) one sentence explaining why it would support FRUS selection decisions.
+3) one sentence explaining why it would support FRUS selection decisions for the current volume,
+4) when relevant, a short note connecting the source to precedent in earlier FRUS coverage.
 
 When possible, prefer links that could be printed or cited directly in FRUS (digitized scans, PDFs, or stable document pages).
 """
@@ -158,12 +160,13 @@ When possible, prefer links that could be printed or cited directly in FRUS (dig
     return response.output_text
 
 
-def suggest_classified_archives(topic: str) -> str:
+def suggest_classified_archives(topic: str, selected_volume: str | None = None) -> str:
     prompt = f"""
-You are helping plan FRUS archival research for: {topic}
+You are serving a FRUS compiler and planning archival research for: {topic}
+Current working volume from the dropdown: {selected_volume or 'Not specified'}
 
-Suggest likely archival collections that may contain still-classified,
-recently declassified, or hard-to-find records.
+Suggest likely closed, partially closed, or hard-to-access archival collections that may contain still-classified,
+recently declassified, or hard-to-find records relevant to the active volume.
 Prioritize likely U.S. government holdings and collection-level hints:
 - Presidential library collections and NSC files
 - State Department lot files
@@ -173,6 +176,7 @@ Prioritize likely U.S. government holdings and collection-level hints:
 - Joint Chiefs of Staff files
 
 Return 8-12 bullet points with likely record groups/collection names.
+For each bullet, add one short reason it is likely to matter for the active FRUS volume.
 """
     response = _get_client().responses.create(model="gpt-5", input=prompt)
     return response.output_text
