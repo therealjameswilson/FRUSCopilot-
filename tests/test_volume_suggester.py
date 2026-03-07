@@ -86,3 +86,42 @@ def test_suggest_documents_accepts_selected_volume_kwarg(monkeypatch):
         "top_k": 10,
         "filters": {"volume_slug": "frus1969-76v34"},
     }
+
+
+def test_retrieve_thematic_documents_falls_back_to_history_state(monkeypatch):
+    monkeypatch.setattr(volume_suggester, "search", lambda query, top_k=20, filters=None: [])
+
+    captured = {}
+
+    def fake_fallback(query: str, top_k: int = 20):
+        captured["query"] = query
+        captured["top_k"] = top_k
+        return [{"chunk_id": "history-state|frus1969-76v34|1", "score": 0.7}]
+
+    monkeypatch.setattr(volume_suggester, "search_history_state_documents", fake_fallback)
+
+    out = volume_suggester.retrieve_thematic_documents(topic="Nunn-Lugar", top_k=7)
+
+    assert out == [{"chunk_id": "history-state|frus1969-76v34|1", "score": 0.7}]
+    assert captured == {"query": "Nunn-Lugar", "top_k": 7}
+
+
+def test_search_history_state_documents_parses_and_deduplicates_results(monkeypatch):
+    html = """
+    <html>
+      <body>
+        <a href="/historicaldocuments/frus1969-76v34/d12">Nunn-Lugar planning memo</a>
+        <a href="https://history.state.gov/historicaldocuments/frus1969-76v34/d12">Nunn-Lugar planning memo</a>
+        <a href="/historicaldocuments/frus1969-76v33/d77">Strategic arms negotiation summary</a>
+      </body>
+    </html>
+    """
+
+    monkeypatch.setattr(volume_suggester, "_fetch_url", lambda _: html)
+
+    out = volume_suggester.search_history_state_documents(query="Nunn-Lugar", top_k=10)
+
+    assert len(out) == 2
+    assert out[0]["history_state_url"] == "https://history.state.gov/historicaldocuments/frus1969-76v34/d12"
+    assert out[0]["matched_themes"] == ["history_state_fallback"]
+    assert out[0]["source_path"] == "history.state.gov search"

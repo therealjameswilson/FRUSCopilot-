@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from html.parser import HTMLParser
+from urllib.error import URLError
+from urllib.parse import quote_plus, urljoin
+from urllib.request import urlopen
 
 from openai import OpenAI
 
@@ -34,6 +38,107 @@ THEME_KEYWORDS: dict[str, dict[str, list[str]]] = {
         ],
     }
 }
+
+HISTORY_STATE_BASE_URL = "https://history.state.gov"
+HISTORY_STATE_SEARCH_PATHS = [
+    "/search?q={query}",
+    "/search?query={query}",
+]
+
+
+class HistoryStateDocumentLinkParser(HTMLParser):
+    """Extract document links from history.state.gov search pages."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.document_links: list[tuple[str, str]] = []
+        self._capture_text = False
+        self._current_href = ""
+        self._current_text_chunks: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a":
+            return
+
+        href = dict(attrs).get("href") or ""
+        if "/historicaldocuments/" in href and re.search(r"/d\d+/?$", href):
+            self._capture_text = True
+            self._current_href = href
+            self._current_text_chunks = []
+
+    def handle_data(self, data: str) -> None:
+        if self._capture_text:
+            self._current_text_chunks.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag != "a" or not self._capture_text:
+            return
+
+        title = " ".join("".join(self._current_text_chunks).split())
+        self.document_links.append((self._current_href, title))
+        self._capture_text = False
+        self._current_href = ""
+        self._current_text_chunks = []
+
+
+def _fetch_url(url: str) -> str:
+    with urlopen(url, timeout=20) as response:
+        return response.read().decode("utf-8", errors="replace")
+
+
+def _score_history_state_hit(title: str, query: str) -> float:
+    normalized_title = _normalize_text(title)
+    query_terms = [term for term in re.split(r"\W+", _normalize_text(query)) if term]
+    if not query_terms:
+        return 0.0
+
+    matched = sum(1 for term in query_terms if term in normalized_title)
+    return matched / len(query_terms)
+
+
+def search_history_state_documents(query: str, top_k: int = 20) -> list[dict]:
+    """Search published FRUS documents on history.state.gov when local index has no hits."""
+    documents: dict[str, dict] = {}
+
+    for path_template in HISTORY_STATE_SEARCH_PATHS:
+        search_url = urljoin(HISTORY_STATE_BASE_URL, path_template.format(query=quote_plus(query)))
+        try:
+            html = _fetch_url(search_url)
+        except (TimeoutError, URLError, ValueError, OSError):
+            continue
+
+        parser = HistoryStateDocumentLinkParser()
+        parser.feed(html)
+
+        for raw_href, raw_title in parser.document_links:
+            public_url = urljoin(HISTORY_STATE_BASE_URL, raw_href)
+            match = re.search(r"/historicaldocuments/([^/]+)/d(\d+)/?$", public_url)
+            if not match:
+                continue
+
+            volume_slug = match.group(1)
+            document_number = match.group(2)
+            title = raw_title or f"Document {document_number}"
+            score = _score_history_state_hit(title=title, query=query)
+
+            existing = documents.get(public_url)
+            candidate = {
+                "chunk_id": f"history-state|{volume_slug}|{document_number}",
+                "title": title,
+                "volume_slug": volume_slug,
+                "document_number": document_number,
+                "history_state_url": public_url,
+                "source_path": "history.state.gov search",
+                "text": "",
+                "date": None,
+                "score": score,
+                "matched_themes": ["history_state_fallback"],
+            }
+            if existing is None or candidate["score"] > existing["score"]:
+                documents[public_url] = candidate
+
+    ranked = sorted(documents.values(), key=lambda row: row.get("score", 0.0), reverse=True)
+    return ranked[:top_k]
 
 
 def suggest_documents(
@@ -108,7 +213,12 @@ def retrieve_thematic_documents(
         merged.append(item)
 
     merged.sort(key=lambda row: row.get("score", 0.0), reverse=True)
-    return merged[:top_k]
+    merged = merged[:top_k]
+
+    if merged:
+        return merged
+
+    return search_history_state_documents(query=topic, top_k=top_k)
 
 
 def _get_client() -> OpenAI:
