@@ -10,12 +10,17 @@ import streamlit as st
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from agents.volume_suggester import (
-    retrieve_thematic_documents,
-    suggest_classified_archives,
-    suggest_declassified_sources,
-)
+from agents import volume_suggester
 from config import CHUNKS_PATH, EMBEDDINGS_DB_PATH, FRUS_REPO_DIR, FRUS_VOLUMES_DIR, MANIFEST_PATH
+
+
+retrieve_thematic_documents = getattr(
+    volume_suggester,
+    "retrieve_thematic_documents",
+    volume_suggester.suggest_documents,
+)
+suggest_classified_archives = volume_suggester.suggest_classified_archives
+suggest_declassified_sources = volume_suggester.suggest_declassified_sources
 
 
 TARGET_FRUS_VOLUMES: list[str] = [
