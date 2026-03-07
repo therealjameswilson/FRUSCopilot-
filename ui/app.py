@@ -24,6 +24,54 @@ suggest_classified_archives = volume_suggester.suggest_classified_archives
 suggest_declassified_sources = volume_suggester.suggest_declassified_sources
 
 
+def call_declassified_sources_suggester(
+    *,
+    topic: str,
+    selected_volume: str | None,
+    related_docs: list[dict],
+) -> str:
+    signature = inspect.signature(suggest_declassified_sources)
+    call_kwargs: dict[str, object] = {}
+
+    if "topic" in signature.parameters:
+        call_kwargs["topic"] = topic
+    elif "query" in signature.parameters:
+        call_kwargs["query"] = topic
+    else:
+        first_param = next(iter(signature.parameters), None)
+        if first_param:
+            call_kwargs[first_param] = topic
+
+    if "selected_volume" in signature.parameters:
+        call_kwargs["selected_volume"] = selected_volume
+
+    if "related_docs" in signature.parameters:
+        call_kwargs["related_docs"] = related_docs
+    elif "results" in signature.parameters:
+        call_kwargs["results"] = related_docs
+
+    return suggest_declassified_sources(**call_kwargs)
+
+
+def call_classified_archives_suggester(*, topic: str, selected_volume: str | None) -> str:
+    signature = inspect.signature(suggest_classified_archives)
+    call_kwargs: dict[str, object] = {}
+
+    if "topic" in signature.parameters:
+        call_kwargs["topic"] = topic
+    elif "query" in signature.parameters:
+        call_kwargs["query"] = topic
+    else:
+        first_param = next(iter(signature.parameters), None)
+        if first_param:
+            call_kwargs[first_param] = topic
+
+    if "selected_volume" in signature.parameters:
+        call_kwargs["selected_volume"] = selected_volume
+
+    return suggest_classified_archives(**call_kwargs)
+
+
 TARGET_FRUS_VOLUMES: list[str] = [
     "Being Researched — 1917–1972, Volume II, Public Diplomacy, The Interwar Period",
     "Being Researched — 1917–1972, Volume III, Public Diplomacy, World War II",
@@ -206,11 +254,17 @@ if query:
 
     with st.expander("Suggested declassified online sources"):
         st.write(
-            suggest_declassified_sources(
+            call_declassified_sources_suggester(
                 topic=query,
+                selected_volume=selected_volume,
                 related_docs=results,
             )
         )
 
     with st.expander("Likely classified archival collections"):
-        st.write(suggest_classified_archives(query))
+        st.write(
+            call_classified_archives_suggester(
+                topic=query,
+                selected_volume=selected_volume,
+            )
+        )
