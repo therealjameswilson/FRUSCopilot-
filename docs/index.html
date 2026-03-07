@@ -78,6 +78,7 @@
         gap: 0.6rem;
         flex-wrap: wrap;
         margin-top: 0.9rem;
+        align-items: center;
       }
 
       button, .button-link {
@@ -92,6 +93,42 @@
 
       .button-link.secondary {
         background: #334155;
+      }
+
+      .loading-indicator {
+        display: none;
+        align-items: center;
+        gap: 0.55rem;
+        color: #881337;
+        font-weight: 600;
+      }
+
+      .loading-indicator.active {
+        display: inline-flex;
+      }
+
+      .buckram-wheel {
+        width: 1.05rem;
+        height: 1.05rem;
+        border-radius: 999px;
+        border: 3px solid #fda4af;
+        border-top-color: #be123c;
+        border-right-color: #9f1239;
+        background:
+          repeating-linear-gradient(
+            45deg,
+            rgba(255, 255, 255, 0.12),
+            rgba(255, 255, 255, 0.12) 2px,
+            rgba(136, 19, 55, 0.2) 2px,
+            rgba(136, 19, 55, 0.2) 4px
+          );
+        animation: spin-wheel 0.7s linear infinite;
+      }
+
+      @keyframes spin-wheel {
+        to {
+          transform: rotate(360deg);
+        }
       }
 
       .meta {
@@ -135,6 +172,10 @@
         <div class="actions">
           <button id="run-search" type="button">Run search</button>
           <a class="button-link secondary" id="share-link" href="#">Copy shareable URL</a>
+          <div class="loading-indicator" id="search-loading" aria-live="polite" role="status">
+            <span class="buckram-wheel" aria-hidden="true"></span>
+            <span>Searching declassified material…</span>
+          </div>
         </div>
 
         <p id="status" class="meta">No file loaded.</p>
@@ -155,6 +196,7 @@
       const maxResultsInput = document.getElementById('max-results');
       const runSearchButton = document.getElementById('run-search');
       const shareLink = document.getElementById('share-link');
+      const searchLoading = document.getElementById('search-loading');
       const status = document.getElementById('status');
       const stats = document.getElementById('stats');
       const resultList = document.getElementById('result-list');
@@ -190,7 +232,20 @@
         }
       });
 
-      runSearchButton.addEventListener('click', runSearch);
+      runSearchButton.addEventListener('click', () => {
+        searchLoading.classList.add('active');
+        runSearchButton.disabled = true;
+        runSearchButton.textContent = 'Searching…';
+
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            runSearch();
+            searchLoading.classList.remove('active');
+            runSearchButton.disabled = false;
+            runSearchButton.textContent = 'Run search';
+          }, 150);
+        });
+      });
       shareLink.addEventListener('click', (event) => {
         event.preventDefault();
         const url = new URL(window.location.href);
