@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import sys
 from datetime import UTC, datetime
 
 import numpy as np
 from openai import OpenAI
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from agents.frus_loader import chunk_document, load_documents, write_chunks_jsonl
 from config import (
