@@ -1,6 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+
+# Environment
 .env
 
-# Ensure FRUS vector database artifacts are commit-eligible
-!database/
-!database/frus_vectors.npy
-!database/frus_vector_ids.json
+# Build / caches
+.pytest_cache/
+.mypy_cache/
+
+# Local FRUS data artifacts
+data/cache/
+data/index/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
