@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -8,6 +9,8 @@ import numpy as np
 from openai import OpenAI
 
 from config import CHUNKS_PATH, EMBEDDING_MODEL, EMBEDDINGS_DB_PATH, OPENAI_API_KEY
+
+TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
 class FrusRetriever:
@@ -52,7 +55,44 @@ class FrusRetriever:
             parsed[chunk_id] = np.frombuffer(blob, dtype=np.float32)
         return parsed
 
-    def search(self, query: str, top_k: int = 20, filters: dict | None = None) -> list[dict]:
+    @staticmethod
+    def _tokenize(value: str) -> list[str]:
+        return TOKEN_RE.findall((value or "").lower())
+
+    def _keyword_scores(self, query: str, filters: dict | None = None) -> list[dict]:
+        q_tokens = self._tokenize(query)
+        if not q_tokens:
+            return []
+        q_set = set(q_tokens)
+        filter_volume = (filters or {}).get("volume_slug")
+
+        scored: list[dict] = []
+        for chunk in self._chunks:
+            if filter_volume and chunk.get("volume_slug") != filter_volume:
+                continue
+
+            title = chunk.get("title") or ""
+            section = chunk.get("section_title") or ""
+            chapter = chunk.get("chapter_title") or ""
+            text = chunk.get("text") or ""
+            haystack = f"{title} {section} {chapter} {text[:3000]}".lower()
+            h_tokens = set(self._tokenize(haystack))
+            overlap = len(q_set & h_tokens)
+            if overlap == 0:
+                continue
+
+            score = overlap / max(len(q_set), 1)
+            if query.lower() in haystack:
+                score += 0.5
+            if any(token in (title + " " + section + " " + chapter).lower() for token in q_set):
+                score += 0.25
+
+            scored.append({**chunk, "score": float(score), "retrieval_method": "keyword"})
+
+        scored.sort(key=lambda item: item["score"], reverse=True)
+        return scored
+
+    def _vector_scores(self, query: str, filters: dict | None = None) -> list[dict]:
         embeddings = self._load_embeddings()
         query_vec = self._embed_query(query)
 
@@ -69,10 +109,43 @@ class FrusRetriever:
 
             denom = np.linalg.norm(query_vec) * np.linalg.norm(emb)
             score = float(np.dot(query_vec, emb) / denom) if denom else 0.0
-            scored.append({**chunk, "score": score})
+            scored.append({**chunk, "score": score, "retrieval_method": "vector"})
 
         scored.sort(key=lambda item: item["score"], reverse=True)
-        return scored[:top_k]
+        return scored
+
+    def search(self, query: str, top_k: int = 20, filters: dict | None = None, strategy: str = "hybrid") -> list[dict]:
+        if strategy == "keyword":
+            return self._keyword_scores(query=query, filters=filters)[:top_k]
+
+        if strategy == "vector":
+            return self._vector_scores(query=query, filters=filters)[:top_k]
+
+        keyword = self._keyword_scores(query=query, filters=filters)
+
+        try:
+            vector = self._vector_scores(query=query, filters=filters)
+        except Exception:
+            vector = []
+
+        merged: dict[str, dict] = {}
+        for item in keyword + vector:
+            key = item.get("chunk_id")
+            if not key:
+                continue
+            existing = merged.get(key)
+            if existing is None:
+                merged[key] = dict(item)
+            else:
+                existing["score"] = max(float(existing.get("score", 0.0)), float(item.get("score", 0.0)))
+                methods = set((existing.get("retrieval_method") or "").split("+")) | {
+                    item.get("retrieval_method", "")
+                }
+                existing["retrieval_method"] = "+".join(sorted(m for m in methods if m))
+
+        ranked = list(merged.values())
+        ranked.sort(key=lambda item: item["score"], reverse=True)
+        return ranked[:top_k]
 
 
 _DEFAULT_RETRIEVER: FrusRetriever | None = None
@@ -85,5 +158,5 @@ def _get_retriever() -> FrusRetriever:
     return _DEFAULT_RETRIEVER
 
 
-def search(query: str, top_k: int = 20, filters: dict | None = None) -> list[dict]:
-    return _get_retriever().search(query=query, top_k=top_k, filters=filters)
+def search(query: str, top_k: int = 20, filters: dict | None = None, strategy: str = "hybrid") -> list[dict]:
+    return _get_retriever().search(query=query, top_k=top_k, filters=filters, strategy=strategy)
