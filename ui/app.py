@@ -12,8 +12,55 @@ import streamlit as st
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from agents import volume_suggester
-from agents.retriever import get_retrieval_status
 from config import CHUNKS_PATH, EMBEDDINGS_DB_PATH, FRUS_REPO_DIR, FRUS_VOLUMES_DIR, MANIFEST_PATH
+
+# compatibility shim for missing get_retrieval_status
+try:
+    from agents.retriever import get_retrieval_status  # preferred
+except ImportError:
+    from pathlib import Path
+
+    def _status_exists(pathlike) -> bool:
+        try:
+            return bool(pathlike) and Path(pathlike).exists()
+        except Exception:
+            return False
+
+    def _count_jsonl_rows(pathlike) -> int:
+        try:
+            p = Path(pathlike)
+            if not p.exists():
+                return 0
+            with p.open("r", encoding="utf-8") as f:
+                return sum(1 for line in f if line.strip())
+        except Exception:
+            return 0
+
+    def get_retrieval_status():
+        """
+        Backward-compatible fallback for older/newer retriever modules.
+        Returns a dict so existing status UI can keep working.
+        """
+        status = {
+            "repo_exists": _status_exists(FRUS_REPO_DIR),
+            "chunks_exists": _status_exists(CHUNKS_PATH),
+            "chunks_count": _count_jsonl_rows(CHUNKS_PATH),
+            "embeddings_exists": _status_exists(EMBEDDINGS_DB_PATH),
+            "ready": _status_exists(CHUNKS_PATH) or _status_exists(EMBEDDINGS_DB_PATH),
+            "frus_repo_dir": str(FRUS_REPO_DIR),
+            "chunks_path": str(CHUNKS_PATH),
+            "embeddings_db_path": str(EMBEDDINGS_DB_PATH),
+        }
+
+        if "FRUS_VOLUMES_DIR" in globals():
+            status["volumes_dir_exists"] = _status_exists(FRUS_VOLUMES_DIR)
+            status["frus_volumes_dir"] = str(FRUS_VOLUMES_DIR)
+
+        if "MANIFEST_PATH" in globals():
+            status["manifest_exists"] = _status_exists(MANIFEST_PATH)
+            status["manifest_path"] = str(MANIFEST_PATH)
+
+        return status
 
 
 retrieve_thematic_documents = getattr(
