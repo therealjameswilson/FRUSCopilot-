@@ -18,6 +18,7 @@ class FrusRetriever:
         self.chunks_path = chunks_path
         self.embeddings_db_path = embeddings_db_path
         self._chunks: list[dict] = []
+        self.last_query_details: dict[str, object] = {}
         self.last_status: str = "uninitialized"
         self.last_error: str | None = None
         self._load_chunks()
@@ -82,17 +83,45 @@ class FrusRetriever:
     def _chunk_volume(chunk: dict) -> str:
         return str(chunk.get("volume_slug") or chunk.get("volume_id") or "")
 
+    @staticmethod
+    def _normalize_value(value: str | None) -> str:
+        return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+    def _normalize_volume_filter(self, filters: dict | None) -> str | None:
+        raw_value = str((filters or {}).get("volume_slug") or "").strip()
+        if not raw_value:
+            return None
+        lowered = raw_value.lower()
+        if lowered in {"all", "any", "*", "none", "(all)", "no filter"}:
+            return None
+        return raw_value
+
+    def _chunk_matches_volume_filter(self, chunk: dict, volume_filter: str | None) -> bool:
+        if not volume_filter:
+            return True
+
+        filter_norm = self._normalize_value(volume_filter)
+        candidates = [
+            str(chunk.get("volume_slug") or ""),
+            str(chunk.get("volume_id") or ""),
+            str(chunk.get("volume_title") or ""),
+        ]
+        candidate_norms = [self._normalize_value(value) for value in candidates if value]
+        return any(filter_norm == value or filter_norm in value for value in candidate_norms)
+
+    def _filtered_chunks(self, filters: dict | None = None) -> list[dict]:
+        volume_filter = self._normalize_volume_filter(filters)
+        return [chunk for chunk in self._chunks if self._chunk_matches_volume_filter(chunk, volume_filter)]
+
     def _keyword_scores(self, query: str, filters: dict | None = None) -> list[dict]:
         q_tokens = self._tokenize(query)
         if not q_tokens:
             return []
         q_set = set(q_tokens)
-        filter_volume = (filters or {}).get("volume_slug")
+        filtered_chunks = self._filtered_chunks(filters)
 
         scored: list[dict] = []
-        for chunk in self._chunks:
-            if filter_volume and self._chunk_volume(chunk) != filter_volume:
-                continue
+        for chunk in filtered_chunks:
 
             title = chunk.get("title") or chunk.get("document_title") or ""
             section = chunk.get("section_title") or ""
@@ -118,13 +147,10 @@ class FrusRetriever:
     def _vector_scores(self, query: str, filters: dict | None = None) -> list[dict]:
         embeddings = self._load_embeddings()
         query_vec = self._embed_query(query)
-
-        filter_volume = (filters or {}).get("volume_slug")
+        filtered_chunks = self._filtered_chunks(filters)
 
         scored: list[dict] = []
-        for chunk in self._chunks:
-            if filter_volume and self._chunk_volume(chunk) != filter_volume:
-                continue
+        for chunk in filtered_chunks:
 
             key = self._chunk_key(chunk)
             emb = embeddings.get(key)
@@ -140,20 +166,59 @@ class FrusRetriever:
 
     def search(self, query: str, top_k: int = 20, filters: dict | None = None, strategy: str = "hybrid") -> list[dict]:
         if self.last_status in {"missing_corpus", "empty_corpus", "load_failed"}:
+            self.last_query_details = {
+                "query": query,
+                "strategy": strategy,
+                "filter_volume": self._normalize_volume_filter(filters),
+                "filtered_candidate_count": 0,
+                "keyword_count": 0,
+                "vector_count": 0,
+                "fallback_used": False,
+            }
             return []
 
+        filtered_chunks = self._filtered_chunks(filters)
+        query_details = {
+            "query": query,
+            "strategy": strategy,
+            "filter_volume": self._normalize_volume_filter(filters),
+            "filtered_candidate_count": len(filtered_chunks),
+            "keyword_count": 0,
+            "vector_count": 0,
+            "fallback_used": False,
+        }
+
         if strategy == "keyword":
-            return self._keyword_scores(query=query, filters=filters)[:top_k]
+            keyword_only = self._keyword_scores(query=query, filters=filters)[:top_k]
+            query_details["keyword_count"] = len(keyword_only)
+            self.last_query_details = query_details
+            return keyword_only
 
         if strategy == "vector":
-            return self._vector_scores(query=query, filters=filters)[:top_k]
+            vector_only = self._vector_scores(query=query, filters=filters)[:top_k]
+            query_details["vector_count"] = len(vector_only)
+            if not vector_only:
+                keyword_fallback = self._keyword_scores(query=query, filters=filters)[:top_k]
+                for item in keyword_fallback:
+                    item["retrieval_method"] = "keyword_fallback"
+                query_details["keyword_count"] = len(keyword_fallback)
+                query_details["fallback_used"] = True
+                self.last_query_details = query_details
+                return keyword_fallback
+            self.last_query_details = query_details
+            return vector_only
 
         keyword = self._keyword_scores(query=query, filters=filters)
+        query_details["keyword_count"] = len(keyword)
 
         try:
             vector = self._vector_scores(query=query, filters=filters)
         except Exception:
             vector = []
+        query_details["vector_count"] = len(vector)
+
+        if not vector and keyword:
+            query_details["fallback_used"] = True
 
         merged: dict[str, dict] = {}
         for item in keyword + vector:
@@ -172,6 +237,7 @@ class FrusRetriever:
 
         ranked = list(merged.values())
         ranked.sort(key=lambda item: item["score"], reverse=True)
+        self.last_query_details = query_details
         return ranked[:top_k]
 
 
@@ -201,6 +267,7 @@ def get_retrieval_status() -> dict[str, object]:
             chunk_line_count = sum(1 for line in handle if line.strip())
 
     embeddings_tables: list[str] = []
+    embeddings_row_counts: dict[str, int] = {}
     if embeddings_db_exists:
         conn = sqlite3.connect(str(retriever.embeddings_db_path))
         try:
@@ -208,8 +275,29 @@ def get_retrieval_status() -> dict[str, object]:
                 "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
             ).fetchall()
             embeddings_tables = [str(row[0]) for row in rows]
+            for table in embeddings_tables:
+                count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                embeddings_row_counts[table] = int(count)
         finally:
             conn.close()
+
+    chunk_ids = {retriever._chunk_key(chunk) for chunk in retriever._chunks if retriever._chunk_key(chunk)}
+    embedding_ids: set[str] = set()
+    if embeddings_db_exists and "embeddings" in embeddings_tables:
+        conn = sqlite3.connect(str(retriever.embeddings_db_path))
+        try:
+            rows = conn.execute("SELECT chunk_id FROM embeddings").fetchall()
+            embedding_ids = {str(row[0]) for row in rows if row and row[0] is not None}
+        finally:
+            conn.close()
+
+    distinct_volumes = sorted(
+        {
+            retriever._chunk_volume(chunk)
+            for chunk in retriever._chunks
+            if retriever._chunk_volume(chunk)
+        }
+    )
 
     return {
         "status": retriever.last_status,
@@ -218,7 +306,18 @@ def get_retrieval_status() -> dict[str, object]:
         "chunks_exists": chunks_exists,
         "chunk_count": len(retriever._chunks),
         "chunk_line_count": chunk_line_count,
+        "distinct_volume_count": len(distinct_volumes),
+        "distinct_volumes_sample": distinct_volumes[:20],
         "embeddings_db_path": str(retriever.embeddings_db_path),
         "embeddings_db_exists": embeddings_db_exists,
         "embeddings_tables": embeddings_tables,
+        "embeddings_row_counts": embeddings_row_counts,
+        "chunk_embedding_alignment": {
+            "chunk_id_count": len(chunk_ids),
+            "embedding_id_count": len(embedding_ids),
+            "matching_ids": len(chunk_ids & embedding_ids),
+            "chunks_missing_embeddings": len(chunk_ids - embedding_ids),
+            "embeddings_missing_chunks": len(embedding_ids - chunk_ids),
+        },
+        "last_query_details": retriever.last_query_details,
     }
