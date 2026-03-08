@@ -96,14 +96,18 @@ def normalize_volume_label(label: str) -> str:
 
 
 def doc_matches_volume(doc: dict[str, str], selected_volume: str) -> bool:
-    if not selected_volume:
+    normalized_selected = (selected_volume or "").strip()
+    if not normalized_selected:
         return True
 
-    selected = normalize_volume_label(selected_volume)
+    if normalize_volume_label(normalized_selected) in {"all", "any", "nofilter"}:
+        return True
+
+    selected = normalize_volume_label(normalized_selected)
     source = normalize_volume_label(doc.get("source", ""))
     title = normalize_volume_label(doc.get("title", ""))
 
-    selected_index = volume_index_from_label(selected_volume)
+    selected_index = volume_index_from_label(normalized_selected)
     source_index = volume_index_from_label(doc.get("source", ""))
 
     source_match = bool(source) and (selected in source or source in selected)

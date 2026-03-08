@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import inspect
-import sqlite3
 import sys
 from datetime import UTC, datetime
 
@@ -12,7 +11,7 @@ import streamlit as st
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from agents import volume_suggester
-from config import CHUNKS_PATH, EMBEDDINGS_DB_PATH, FRUS_REPO_DIR, FRUS_VOLUMES_DIR, MANIFEST_PATH
+from config import CHUNKS_PATH, FRUS_REPO_DIR, FRUS_VOLUMES_DIR, MANIFEST_PATH
 
 # compatibility shim for missing get_retrieval_status
 try:
@@ -213,34 +212,7 @@ TARGET_FRUS_VOLUMES: list[str] = [
 ]
 
 
-def ensure_local_index_files() -> bool:
-    created_any = False
 
-    if not EMBEDDINGS_DB_PATH.exists():
-        EMBEDDINGS_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(EMBEDDINGS_DB_PATH))
-        try:
-            conn.execute("CREATE TABLE IF NOT EXISTS embeddings (chunk_id TEXT PRIMARY KEY, embedding BLOB NOT NULL)")
-            conn.commit()
-        finally:
-            conn.close()
-        created_any = True
-
-    if created_any and not MANIFEST_PATH.exists():
-        MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
-        manifest = {
-            "schema_version": "1.2",
-            "built_at": datetime.now(UTC).isoformat(),
-            "repo_path": str(FRUS_REPO_DIR),
-            "volumes_path": str(FRUS_VOLUMES_DIR),
-            "chunk_count": 0,
-            "volume_count": 0,
-            "chunks_path": str(CHUNKS_PATH),
-            "embeddings_path": str(EMBEDDINGS_DB_PATH),
-        }
-        MANIFEST_PATH.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-
-    return created_any
 
 st.set_page_config(page_title="FRUS Compiler Copilot Beta", layout="wide")
 st.title("FRUS Compiler Copilot Beta")
@@ -255,35 +227,46 @@ st.markdown(
 """
 )
 
-created_placeholder_index = ensure_local_index_files()
-
-if created_placeholder_index:
-    st.info(
-        "Created missing index files so the app can start. "
-        "Run `python3 scripts/build_frus_chunks.py --sync` "
-        "to build a real FRUS index."
-    )
-
 retrieval_status = get_retrieval_status()
 status_code = retrieval_status.get("status")
+chunk_count = int(retrieval_status.get("chunk_count") or 0)
+chunk_path = retrieval_status.get("chunks_path")
+emb_path = retrieval_status.get("embeddings_db_path")
+
 if status_code == "missing_corpus":
-    st.warning(
-        "Local FRUS corpus is missing. Build it with `python3 scripts/build_frus_chunks.py --sync`. "
-        f"Expected path: {retrieval_status.get('chunks_path')}"
+    st.error(
+        "FRUS corpus is missing; retrieval cannot run. "
+        "Build it with `python3 scripts/build_frus_chunks.py --sync`. "
+        f"Expected chunks path: {chunk_path}"
     )
 elif status_code == "empty_corpus":
-    st.warning(
-        "Local FRUS corpus loaded but contains 0 chunks. Rebuild with "
-        "`python3 scripts/build_frus_chunks.py --sync`."
+    st.error(
+        "FRUS corpus loaded but contains zero chunks; retrieval cannot run. "
+        "Rebuild with `python3 scripts/build_frus_chunks.py --sync`."
     )
 elif status_code == "load_failed":
     st.error(
-        "Local FRUS corpus failed to load. "
+        "FRUS corpus failed to load. "
         f"Error: {retrieval_status.get('error')}"
     )
 else:
-    st.caption(
-        f"Local FRUS corpus ready: {retrieval_status.get('chunk_count')} chunks from {retrieval_status.get('chunks_path')}"
+    st.success(f"FRUS corpus ready: {chunk_count} chunks")
+
+with st.expander("Retrieval/index status"):
+    st.json(
+        {
+            "status": status_code,
+            "chunks_path": chunk_path,
+            "chunk_count": chunk_count,
+            "distinct_volume_count": retrieval_status.get("distinct_volume_count"),
+            "distinct_volumes_sample": retrieval_status.get("distinct_volumes_sample"),
+            "embeddings_db_path": emb_path,
+            "embeddings_db_exists": retrieval_status.get("embeddings_db_exists"),
+            "embeddings_tables": retrieval_status.get("embeddings_tables"),
+            "embeddings_row_counts": retrieval_status.get("embeddings_row_counts"),
+            "chunk_embedding_alignment": retrieval_status.get("chunk_embedding_alignment"),
+            "last_query_details": retrieval_status.get("last_query_details"),
+        }
     )
 
 
@@ -369,16 +352,24 @@ if query:
         st.subheader("FRUS Retrieval Results")
 
     if not results:
-        status = get_retrieval_status().get("status")
+        runtime_status = get_retrieval_status()
+        status = runtime_status.get("status")
+        query_diag = runtime_status.get("last_query_details") or {}
         if status == "missing_corpus":
             st.error("No results because the FRUS corpus file is missing. Run `python3 scripts/build_frus_chunks.py --sync`.")
         elif status == "empty_corpus":
-            st.warning("No results because the FRUS corpus is empty. Rebuild with `python3 scripts/build_frus_chunks.py --sync`.")
+            st.error("No results because the FRUS corpus is empty. Rebuild with `python3 scripts/build_frus_chunks.py --sync`.")
         elif status == "load_failed":
-            err = get_retrieval_status().get("error")
+            err = runtime_status.get("error")
             st.error(f"No results because corpus load failed: {err}")
         else:
-            st.info("Search completed but no matching chunks were found for this query/filter.")
+            st.warning(
+                "No matching chunks after retrieval. "
+                f"Filtered candidates before semantic lookup: {query_diag.get('filtered_candidate_count', 0)}; "
+                f"keyword hits: {query_diag.get('keyword_count', 0)}; "
+                f"vector hits: {query_diag.get('vector_count', 0)}; "
+                f"keyword fallback used: {query_diag.get('fallback_used', False)}."
+            )
 
     for item in results:
         themes = item.get("matched_themes") or ["primary"]

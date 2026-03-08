@@ -59,6 +59,11 @@ def test_doc_matches_volume_by_source_name():
     assert not doc_matches_volume(doc, "FRUS 1969-76, Volume XII")
 
 
+
+
+def test_doc_matches_volume_accepts_all_filter_value():
+    doc = {"source": "frus1969-76v11.xml", "title": "Doc", "text": "Body"}
+    assert doc_matches_volume(doc, "All")
 def test_doc_matches_volume_does_not_match_empty_source_or_title():
     doc = {"source": "", "title": "", "text": "Body"}
     assert not doc_matches_volume(doc, "FRUS 1969-76, Volume XII")
