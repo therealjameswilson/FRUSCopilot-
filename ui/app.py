@@ -11,7 +11,7 @@ import streamlit as st
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from agents import volume_suggester
-from config import CHUNKS_PATH, FRUS_REPO_DIR, FRUS_VOLUMES_DIR, MANIFEST_PATH
+from config import CHUNKS_PATH, EMBEDDINGS_DB_PATH, FRUS_REPO_DIR, FRUS_VOLUMES_DIR, MANIFEST_PATH
 
 # compatibility shim for missing get_retrieval_status
 try:
