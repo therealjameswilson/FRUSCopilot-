@@ -17,18 +17,33 @@ class FrusRetriever:
     def __init__(self, chunks_path: Path = CHUNKS_PATH, embeddings_db_path: Path = EMBEDDINGS_DB_PATH):
         self.chunks_path = chunks_path
         self.embeddings_db_path = embeddings_db_path
-        self._chunks = self._load_chunks()
+        self._chunks: list[dict] = []
+        self.last_status: str = "uninitialized"
+        self.last_error: str | None = None
+        self._load_chunks()
 
     def _load_chunks(self) -> list[dict]:
+        self.last_error = None
         if not self.chunks_path.exists():
-            raise FileNotFoundError(f"Missing chunk index: {self.chunks_path}")
+            self.last_status = "missing_corpus"
+            self._chunks = []
+            return self._chunks
 
         chunks: list[dict] = []
-        with self.chunks_path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                line = line.strip()
-                if line:
-                    chunks.append(json.loads(line))
+        try:
+            with self.chunks_path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if line:
+                        chunks.append(json.loads(line))
+        except Exception as exc:
+            self.last_status = "load_failed"
+            self.last_error = str(exc)
+            self._chunks = []
+            return self._chunks
+
+        self._chunks = chunks
+        self.last_status = "ready" if chunks else "empty_corpus"
         return chunks
 
     @staticmethod
@@ -59,6 +74,14 @@ class FrusRetriever:
     def _tokenize(value: str) -> list[str]:
         return TOKEN_RE.findall((value or "").lower())
 
+    @staticmethod
+    def _chunk_key(chunk: dict) -> str:
+        return str(chunk.get("chunk_id") or chunk.get("id") or "")
+
+    @staticmethod
+    def _chunk_volume(chunk: dict) -> str:
+        return str(chunk.get("volume_slug") or chunk.get("volume_id") or "")
+
     def _keyword_scores(self, query: str, filters: dict | None = None) -> list[dict]:
         q_tokens = self._tokenize(query)
         if not q_tokens:
@@ -68,10 +91,10 @@ class FrusRetriever:
 
         scored: list[dict] = []
         for chunk in self._chunks:
-            if filter_volume and chunk.get("volume_slug") != filter_volume:
+            if filter_volume and self._chunk_volume(chunk) != filter_volume:
                 continue
 
-            title = chunk.get("title") or ""
+            title = chunk.get("title") or chunk.get("document_title") or ""
             section = chunk.get("section_title") or ""
             chapter = chunk.get("chapter_title") or ""
             text = chunk.get("text") or ""
@@ -100,10 +123,11 @@ class FrusRetriever:
 
         scored: list[dict] = []
         for chunk in self._chunks:
-            if filter_volume and chunk.get("volume_slug") != filter_volume:
+            if filter_volume and self._chunk_volume(chunk) != filter_volume:
                 continue
 
-            emb = embeddings.get(chunk["chunk_id"])
+            key = self._chunk_key(chunk)
+            emb = embeddings.get(key)
             if emb is None:
                 continue
 
@@ -115,6 +139,9 @@ class FrusRetriever:
         return scored
 
     def search(self, query: str, top_k: int = 20, filters: dict | None = None, strategy: str = "hybrid") -> list[dict]:
+        if self.last_status in {"missing_corpus", "empty_corpus", "load_failed"}:
+            return []
+
         if strategy == "keyword":
             return self._keyword_scores(query=query, filters=filters)[:top_k]
 
@@ -130,7 +157,7 @@ class FrusRetriever:
 
         merged: dict[str, dict] = {}
         for item in keyword + vector:
-            key = item.get("chunk_id")
+            key = self._chunk_key(item)
             if not key:
                 continue
             existing = merged.get(key)
@@ -160,3 +187,13 @@ def _get_retriever() -> FrusRetriever:
 
 def search(query: str, top_k: int = 20, filters: dict | None = None, strategy: str = "hybrid") -> list[dict]:
     return _get_retriever().search(query=query, top_k=top_k, filters=filters, strategy=strategy)
+
+
+def get_retrieval_status() -> dict[str, str | int | None]:
+    retriever = _get_retriever()
+    return {
+        "status": retriever.last_status,
+        "error": retriever.last_error,
+        "chunks_path": str(retriever.chunks_path),
+        "chunk_count": len(retriever._chunks),
+    }

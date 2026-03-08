@@ -10,7 +10,7 @@ INDEX_DIR = DATA_DIR / "index"
 FRUS_REPO_DIR = CACHE_DIR / "frus_repo"
 FRUS_VOLUMES_DIR = FRUS_REPO_DIR / "volumes"
 
-CHUNKS_PATH = INDEX_DIR / "chunks.jsonl"
+CHUNKS_PATH = INDEX_DIR / "frus_chunks_1961_plus.jsonl"
 EMBEDDINGS_DB_PATH = INDEX_DIR / "embeddings.sqlite"
 MANIFEST_PATH = INDEX_DIR / "manifest.json"
 
