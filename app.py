@@ -106,12 +106,10 @@ def doc_matches_volume(doc: dict[str, str], selected_volume: str) -> bool:
     selected_index = volume_index_from_label(selected_volume)
     source_index = volume_index_from_label(doc.get("source", ""))
 
-    return (
-        selected in source
-        or source in selected
-        or selected in title
-        or (selected_index and selected_index == source_index)
-    )
+    source_match = bool(source) and (selected in source or source in selected)
+    title_match = bool(title) and selected in title
+
+    return source_match or title_match or (selected_index and selected_index == source_index)
 
 
 

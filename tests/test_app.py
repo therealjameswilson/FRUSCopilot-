@@ -59,6 +59,11 @@ def test_doc_matches_volume_by_source_name():
     assert not doc_matches_volume(doc, "FRUS 1969-76, Volume XII")
 
 
+def test_doc_matches_volume_does_not_match_empty_source_or_title():
+    doc = {"source": "", "title": "", "text": "Body"}
+    assert not doc_matches_volume(doc, "FRUS 1969-76, Volume XII")
+
+
 def test_get_volume_options_includes_manual_entries(monkeypatch):
     html = """
     <table>
