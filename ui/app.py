@@ -288,7 +288,7 @@ else:
 
 
 query = st.text_input("Search topic")
-mode = st.radio("Search mode", ["Exact Retrieval", "Compiler Assist (Inference Mode)"], horizontal=True)
+mode = st.radio("Search mode", ["Exact Retrieval", "Compiler Assist (Inference Mode)"], index=1, horizontal=True)
 selected_volume = st.selectbox(
     "Current FRUS volume being compiled",
     options=TARGET_FRUS_VOLUMES,
