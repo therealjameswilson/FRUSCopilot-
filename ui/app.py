@@ -12,6 +12,7 @@ import streamlit as st
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from agents import volume_suggester
+from agents.retriever import get_retrieval_status
 from config import CHUNKS_PATH, EMBEDDINGS_DB_PATH, FRUS_REPO_DIR, FRUS_VOLUMES_DIR, MANIFEST_PATH
 
 
@@ -168,11 +169,6 @@ TARGET_FRUS_VOLUMES: list[str] = [
 def ensure_local_index_files() -> bool:
     created_any = False
 
-    if not CHUNKS_PATH.exists():
-        CHUNKS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        CHUNKS_PATH.write_text("", encoding="utf-8")
-        created_any = True
-
     if not EMBEDDINGS_DB_PATH.exists():
         EMBEDDINGS_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(EMBEDDINGS_DB_PATH))
@@ -183,10 +179,10 @@ def ensure_local_index_files() -> bool:
             conn.close()
         created_any = True
 
-    if created_any:
+    if created_any and not MANIFEST_PATH.exists():
         MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
         manifest = {
-            "schema_version": "1.1",
+            "schema_version": "1.2",
             "built_at": datetime.now(UTC).isoformat(),
             "repo_path": str(FRUS_REPO_DIR),
             "volumes_path": str(FRUS_VOLUMES_DIR),
@@ -217,9 +213,32 @@ created_placeholder_index = ensure_local_index_files()
 if created_placeholder_index:
     st.info(
         "Created missing index files so the app can start. "
-        "Run `python3 scripts/sync_frus_repo.py` then `python3 scripts/build_frus_index.py` "
+        "Run `python3 scripts/build_frus_chunks.py --sync` "
         "to build a real FRUS index."
     )
+
+retrieval_status = get_retrieval_status()
+status_code = retrieval_status.get("status")
+if status_code == "missing_corpus":
+    st.warning(
+        "Local FRUS corpus is missing. Build it with `python3 scripts/build_frus_chunks.py --sync`. "
+        f"Expected path: {retrieval_status.get('chunks_path')}"
+    )
+elif status_code == "empty_corpus":
+    st.warning(
+        "Local FRUS corpus loaded but contains 0 chunks. Rebuild with "
+        "`python3 scripts/build_frus_chunks.py --sync`."
+    )
+elif status_code == "load_failed":
+    st.error(
+        "Local FRUS corpus failed to load. "
+        f"Error: {retrieval_status.get('error')}"
+    )
+else:
+    st.caption(
+        f"Local FRUS corpus ready: {retrieval_status.get('chunk_count')} chunks from {retrieval_status.get('chunks_path')}"
+    )
+
 
 query = st.text_input("Search topic")
 mode = st.radio("Search mode", ["Exact Retrieval", "Compiler Assist (Inference Mode)"], horizontal=True)
@@ -303,7 +322,16 @@ if query:
         st.subheader("FRUS Retrieval Results")
 
     if not results:
-        st.info("No matching chunks found.")
+        status = get_retrieval_status().get("status")
+        if status == "missing_corpus":
+            st.error("No results because the FRUS corpus file is missing. Run `python3 scripts/build_frus_chunks.py --sync`.")
+        elif status == "empty_corpus":
+            st.warning("No results because the FRUS corpus is empty. Rebuild with `python3 scripts/build_frus_chunks.py --sync`.")
+        elif status == "load_failed":
+            err = get_retrieval_status().get("error")
+            st.error(f"No results because corpus load failed: {err}")
+        else:
+            st.info("Search completed but no matching chunks were found for this query/filter.")
 
     for item in results:
         themes = item.get("matched_themes") or ["primary"]
@@ -315,8 +343,8 @@ if query:
             f"score: {item.get('score', 0):.4f}"
         )
         st.caption(f"Matched themes/topics: {', '.join(themes)}")
-        st.markdown(f"[Public URL]({item.get('history_state_url')})")
-        st.caption(item.get("source_path"))
+        st.markdown(f"[Public URL]({item.get('history_state_url') or item.get('source_url')})")
+        st.caption(item.get("source_path") or item.get("source_file"))
         with st.expander("Text chunk"):
             st.write(item.get("text"))
         st.divider()

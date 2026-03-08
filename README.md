@@ -9,6 +9,36 @@ This repository includes a lightweight public web interface that lets colleagues
 - Optionally allows uploading a single XML file directly from the page.
 - Supports shareable URL queries (GET) and a health endpoint at `/healthz` for uptime checks.
 
+
+## Build the local FRUS 1961+ corpus
+
+This app now retrieves from a local JSONL chunk corpus built from `HistoryAtState/frus` TEI/XML volumes.
+
+1. Build/sync and chunk the corpus:
+
+```bash
+python3 scripts/build_frus_chunks.py --sync
+```
+
+Output: `data/index/frus_chunks_1961_plus.jsonl` (1961+ volumes only).
+
+2. (Optional) Build embeddings for vector retrieval:
+
+```bash
+python3 scripts/build_frus_index.py --sync --with-embeddings
+```
+
+The chunk schema includes metadata fields used by retrieval and future compiler-assist reranking, including: `id`, `text`, `volume_id`, `volume_title`, `volume_start_year`, `volume_end_year`, `document_id`, `document_title`, `chapter_title`, `compilation_title`, `section_title`, `source_url`, `source_file`, `chunk_index`, and when available `administration` and `doc_date`.
+
+Canonical FRUS URLs are mapped as:
+`https://history.state.gov/historicaldocuments/{volume_id}/{document_id}`
+
+The Streamlit app (`ui/app.py`) consumes `data/index/frus_chunks_1961_plus.jsonl` via `agents/retriever.py` and now differentiates these states:
+- corpus file missing
+- corpus file empty
+- corpus load failure
+- no search hits for the current query/filter
+
 ## Run locally
 
 ```bash
