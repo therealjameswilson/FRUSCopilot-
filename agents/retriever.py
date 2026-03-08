@@ -189,11 +189,36 @@ def search(query: str, top_k: int = 20, filters: dict | None = None, strategy: s
     return _get_retriever().search(query=query, top_k=top_k, filters=filters, strategy=strategy)
 
 
-def get_retrieval_status() -> dict[str, str | int | None]:
+def get_retrieval_status() -> dict[str, object]:
     retriever = _get_retriever()
+
+    chunks_exists = retriever.chunks_path.exists()
+    embeddings_db_exists = retriever.embeddings_db_path.exists()
+
+    chunk_line_count = 0
+    if chunks_exists:
+        with retriever.chunks_path.open("r", encoding="utf-8") as handle:
+            chunk_line_count = sum(1 for line in handle if line.strip())
+
+    embeddings_tables: list[str] = []
+    if embeddings_db_exists:
+        conn = sqlite3.connect(str(retriever.embeddings_db_path))
+        try:
+            rows = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            ).fetchall()
+            embeddings_tables = [str(row[0]) for row in rows]
+        finally:
+            conn.close()
+
     return {
         "status": retriever.last_status,
         "error": retriever.last_error,
         "chunks_path": str(retriever.chunks_path),
+        "chunks_exists": chunks_exists,
         "chunk_count": len(retriever._chunks),
+        "chunk_line_count": chunk_line_count,
+        "embeddings_db_path": str(retriever.embeddings_db_path),
+        "embeddings_db_exists": embeddings_db_exists,
+        "embeddings_tables": embeddings_tables,
     }
